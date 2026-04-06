@@ -1,0 +1,1724 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="高速記録">
+  <meta name="theme-color" content="#1565C0">
+  <meta name="description" content="日本の高速道路の走行記録を地図上で管理できるアプリ。走行済み区間を記録して走破率を確認しよう。">
+  <link rel="manifest" href="manifest.json">
+  <link rel="apple-touch-icon" href="icon-192.png">
+  <title>🚗 高速走行記録</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+  <style>
+    *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+    body{font-family:'Hiragino Sans','Yu Gothic','Meiryo',sans-serif;background:#f0f2f5;height:100vh;overflow:hidden}
+    #map-container{position:fixed;top:0;left:0;width:100%;height:calc(100vh - 64px - env(safe-area-inset-bottom, 0px));z-index:1}
+    #map{width:100%;height:100%}
+    .bottom-nav{position:fixed;bottom:0;left:0;width:100%;height:calc(64px + env(safe-area-inset-bottom, 0px));padding-bottom:env(safe-area-inset-bottom, 0px);background:#fff;display:flex;border-top:1px solid #e0e0e0;box-shadow:0 -2px 12px rgba(0,0,0,.1);z-index:1000}
+    .nav-item{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;cursor:pointer;color:#9e9e9e;font-size:10px;font-weight:600;transition:color .2s;user-select:none;min-height:44px}
+    .nav-item.active{color:#1565C0}
+    .nav-icon{font-size:22px}
+    .panel{position:fixed;top:0;left:0;width:100%;height:calc(100vh - 64px - env(safe-area-inset-bottom, 0px));background:#f0f2f5;overflow-y:auto;z-index:500;display:none;-webkit-overflow-scrolling:touch}
+    .panel.active{display:block}
+    .panel-header{background:#1565C0;color:#fff;padding:16px 18px;font-size:17px;font-weight:700;position:sticky;top:0;z-index:10;box-shadow:0 2px 6px rgba(0,0,0,.15)}
+    .form-card{background:#fff;margin:12px;border-radius:16px;padding:18px;box-shadow:0 1px 4px rgba(0,0,0,.08)}
+    .form-group{margin-bottom:18px}
+    .form-label{font-size:12px;font-weight:700;color:#555;margin-bottom:6px;display:block}
+    .form-select,.form-input{width:100%;padding:12px 14px;border:1.5px solid #e0e0e0;border-radius:10px;font-size:15px;font-family:inherit;background:#fafafa;appearance:none;-webkit-appearance:none;color:#333}
+    .form-select:focus,.form-input:focus{outline:none;border-color:#1565C0;background:#fff}
+    .btn-primary{width:100%;padding:15px;background:#1565C0;color:#fff;border:none;border-radius:12px;font-size:16px;font-weight:700;cursor:pointer;font-family:inherit;box-shadow:0 3px 8px rgba(21,101,192,.35)}
+    .btn-primary:active{background:#0d47a1}
+    .history-item{background:#fff;margin:8px 12px;border-radius:14px;padding:14px 16px;box-shadow:0 1px 4px rgba(0,0,0,.07);display:flex;align-items:center;gap:14px}
+    .hw-badge{width:48px;height:48px;border-radius:10px;display:flex;flex-direction:column;align-items:center;justify-content:center;flex-shrink:0}
+    .hw-badge-name{color:#fff;font-size:10px;font-weight:800;line-height:1.2;text-align:center}
+    .hw-badge-num{color:rgba(255,255,255,.85);font-size:9px;font-weight:600}
+    .history-info{flex:1;min-width:0}
+    .history-route{font-size:14px;font-weight:700;color:#222;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    .history-sub{font-size:12px;color:#777;margin-top:3px}
+    .history-km{font-size:12px;color:#1565C0;font-weight:600;margin-top:1px}
+    .delete-btn{color:#bbb;font-size:20px;cursor:pointer;padding:6px;flex-shrink:0}
+    .delete-btn:active{color:#e53935}
+    .stats-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:12px}
+    .stats-card{background:#fff;border-radius:14px;padding:16px;box-shadow:0 1px 4px rgba(0,0,0,.07)}
+    .stats-label{font-size:11px;font-weight:600;color:#888;margin-bottom:4px}
+    .stats-value{font-size:28px;font-weight:800;color:#1565C0;line-height:1.1}
+    .stats-unit{font-size:13px;font-weight:500;color:#888}
+    .stats-section-card{background:#fff;margin:0 12px 12px;border-radius:16px;padding:16px 18px;box-shadow:0 1px 4px rgba(0,0,0,.07)}
+    .stats-section-title{font-size:13px;font-weight:700;color:#333;margin-bottom:14px}
+    .hw-stat-row{display:flex;align-items:center;gap:10px;margin-bottom:14px}
+    .hw-stat-row:last-child{margin-bottom:0}
+    .hw-stat-badge{width:40px;height:40px;border-radius:8px;display:flex;flex-direction:column;align-items:center;justify-content:center;flex-shrink:0}
+    .hw-stat-badge span{color:#fff;font-size:8px;font-weight:800;text-align:center;line-height:1.3}
+    .hw-stat-info{flex:1}
+    .hw-stat-name{font-size:12px;font-weight:600;color:#333;margin-bottom:4px}
+    .hw-stat-bar-bg{height:7px;background:#ebebeb;border-radius:4px;overflow:hidden}
+    .hw-stat-bar{height:7px;border-radius:4px;transition:width .6s}
+    .hw-stat-km{font-size:11px;color:#999;margin-top:3px}
+    .map-legend{position:absolute;bottom:14px;left:10px;background:rgba(255,255,255,.93);border-radius:10px;padding:8px 12px;z-index:400;box-shadow:0 2px 8px rgba(0,0,0,.12);font-size:11px}
+    .legend-row{display:flex;align-items:center;gap:7px;margin:3px 0}
+    .legend-line{width:22px;height:3px;border-radius:2px}
+    .legend-text{color:#555;font-weight:500}
+    .header-chip{position:absolute;top:10px;right:10px;background:rgba(255,255,255,.92);border-radius:20px;padding:6px 12px;z-index:400;box-shadow:0 2px 8px rgba(0,0,0,.12);font-size:12px;font-weight:700;color:#1565C0}
+    .empty-state{text-align:center;padding:60px 24px;color:#bbb}
+    .empty-icon{font-size:52px;margin-bottom:14px}
+    .empty-text{font-size:14px;line-height:1.6}
+    .toast{position:fixed;bottom:calc(82px + env(safe-area-inset-bottom, 0px));left:50%;transform:translateX(-50%) translateY(8px);background:rgba(30,30,30,.88);color:#fff;padding:11px 22px;border-radius:24px;font-size:13px;font-weight:500;z-index:3000;opacity:0;transition:opacity .25s,transform .25s;white-space:nowrap;max-width:90vw;overflow:hidden;text-overflow:ellipsis;pointer-events:none}
+    .toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+    .list-section-label{font-size:11px;font-weight:700;color:#999;padding:10px 16px 4px;letter-spacing:.5px}
+    .sort-bar{display:flex;gap:6px;margin-bottom:14px;flex-wrap:wrap}
+    .sort-btn{flex:1;min-width:0;padding:7px 6px;border:1.5px solid #e0e0e0;border-radius:8px;font-size:11px;font-weight:600;color:#666;background:#fafafa;cursor:pointer;font-family:inherit;white-space:nowrap}
+    .sort-btn.active{border-color:#1565C0;color:#1565C0;background:#e8f0fe}
+    .data-mgmt-card{background:#fff;margin:12px;border-radius:16px;padding:18px;box-shadow:0 1px 4px rgba(0,0,0,.08)}
+    .data-mgmt-title{font-size:13px;font-weight:700;color:#333;margin-bottom:14px}
+    .data-mgmt-row{display:flex;gap:10px}
+    .btn-export{flex:1;padding:13px;background:#1565C0;color:#fff;border:none;border-radius:12px;font-size:14px;font-weight:700;cursor:pointer;font-family:inherit;display:flex;align-items:center;justify-content:center;gap:6px}
+    .btn-export:active{background:#0d47a1}
+    .btn-import{flex:1;padding:13px;background:#fff;color:#1565C0;border:2px solid #1565C0;border-radius:12px;font-size:14px;font-weight:700;cursor:pointer;font-family:inherit;display:flex;align-items:center;justify-content:center;gap:6px}
+    .btn-import:active{background:#e8f0fe}
+    .data-note{font-size:11px;color:#999;margin-top:10px;line-height:1.6;text-align:center}
+  </style>
+</head>
+<body>
+<div id="map-container">
+  <div id="map"></div>
+  <div class="map-legend">
+    <div class="legend-row"><div style="width:22px;height:2px;border-top:2px dashed #aaa"></div><span class="legend-text">未走行</span></div>
+    <div class="legend-row"><div class="legend-line" style="background:#E91E63;height:4px"></div><span class="legend-text">走行済み</span></div>
+  </div>
+  <div class="header-chip" id="map-chip">地図を読込中…</div>
+</div>
+<nav class="bottom-nav">
+  <div class="nav-item active" onclick="showTab('map')" id="nav-map"><span class="nav-icon">🗺️</span><span>地図</span></div>
+  <div class="nav-item" onclick="showTab('record')" id="nav-record"><span class="nav-icon">✏️</span><span>記録</span></div>
+  <div class="nav-item" onclick="showTab('history')" id="nav-history"><span class="nav-icon">📋</span><span>履歴</span></div>
+  <div class="nav-item" onclick="showTab('stats')" id="nav-stats"><span class="nav-icon">📊</span><span>統計</span></div>
+</nav>
+<div class="panel" id="panel-record">
+  <div class="panel-header">✏️ 走行記録を追加</div>
+  <div class="form-card">
+    <div class="form-group"><label class="form-label">高速道路</label><select class="form-select" id="sel-highway" onchange="onHighwayChange()"><option value="">── 選択してください ──</option></select></div>
+    <div class="form-group"><label class="form-label">乗ったIC・JCT（起点）</label><select class="form-select" id="sel-start"><option value="">先に高速道路を選択</option></select></div>
+    <div class="form-group"><label class="form-label">降りたIC・JCT（終点）</label><select class="form-select" id="sel-end"><option value="">先に高速道路を選択</option></select></div>
+    <div class="form-group"><label class="form-label">走行日</label><input type="date" class="form-input" id="inp-date"></div>
+    <div class="form-group"><label class="form-label">メモ（任意）</label><input type="text" class="form-input" id="inp-memo" placeholder="例：家族旅行、帰省など"></div>
+    <button class="btn-primary" onclick="saveRecord()">💾 記録を保存</button>
+  </div>
+</div>
+<div class="panel" id="panel-history"><div class="panel-header">📋 走行履歴</div><div id="history-list"></div></div>
+<div class="panel" id="panel-stats">
+  <div class="panel-header" style="display:flex;justify-content:space-between;align-items:center">
+    <span>📊 走行統計</span>
+    <button onclick="shareToX()" style="background:rgba(255,255,255,0.18);color:#fff;border:1.5px solid rgba(255,255,255,0.5);border-radius:20px;padding:7px 16px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;display:flex;align-items:center;gap:6px;min-height:36px">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="white"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-4.714-6.231-5.401 6.231H2.746l7.73-8.835L1.254 2.25H8.08l4.258 5.632 5.906-5.632zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg>
+      シェア
+    </button>
+  </div>
+  <div id="stats-content"></div>
+  <div class="data-mgmt-card">
+    <div class="data-mgmt-title">💾 データ管理</div>
+    <div class="data-mgmt-row">
+      <button class="btn-export" onclick="exportData()">📤 書き出す</button>
+      <button class="btn-import" onclick="document.getElementById('import-input').click()">📥 読み込む</button>
+    </div>
+    <p class="data-note">書き出し：走行データをJSONファイルに保存<br>読み込み：別の端末や以前のデータを復元</p>
+    <input type="file" id="import-input" accept=".json" style="display:none" onchange="importData(event)">
+  </div>
+</div>
+<div class="toast" id="toast"></div>
+
+<script>
+const HIGHWAYS = [
+  // ── E1 東名 ─────────────────────────────────────────
+  { id:"tomei", name:"東名高速道路", short:"東名", num:"E1", color:"#E91E63",
+    ics:[
+      {n:"東京",km:0,lat:35.6262,lng:139.7504},{n:"用賀",km:6.5,lat:35.6149,lng:139.6398},
+      {n:"東名川崎",km:17.2,lat:35.5567,lng:139.6613},{n:"横浜青葉",km:27.5,lat:35.5428,lng:139.5389},
+      {n:"横浜町田",km:34.8,lat:35.5228,lng:139.4559},{n:"厚木",km:48.9,lat:35.4511,lng:139.3754},
+      {n:"秦野中井",km:66.6,lat:35.3778,lng:139.2697},{n:"大井松田",km:79,lat:35.328,lng:139.1584},
+      {n:"御殿場",km:87.7,lat:35.3047,lng:138.9321},{n:"沼津",km:103.5,lat:35.1798,lng:138.8551},
+      {n:"富士",km:116.8,lat:35.2205,lng:138.7201},{n:"清水",km:139.8,lat:35.0368,lng:138.5502},
+      {n:"静岡",km:162.5,lat:34.9714,lng:138.4116},{n:"焼津",km:185.5,lat:34.8649,lng:138.3185},
+      {n:"掛川",km:217,lat:34.7551,lng:137.9974},{n:"浜松西",km:257.3,lat:34.7279,lng:137.7214},
+      {n:"浜松",km:262.3,lat:34.7254,lng:137.6687},{n:"三ヶ日",km:275,lat:34.7753,lng:137.5748},
+      {n:"豊川",km:299,lat:34.8183,lng:137.3798},{n:"岡崎",km:318.6,lat:34.9437,lng:137.1682},
+      {n:"豊田",km:325.5,lat:35.071,lng:137.1548},{n:"名古屋",km:342.8,lat:35.1695,lng:136.9063}
+    ]
+  },
+  // ── E1A 新東名 ──────────────────────────────────────
+  { id:"shintomei", name:"新東名高速道路", short:"新東名", num:"E1A", color:"#FF5722",
+    ics:[
+      {n:"海老名南JCT",km:0,lat:35.446,lng:139.3913},{n:"伊勢原JCT",km:13.2,lat:35.4015,lng:139.2914},
+      {n:"新秦野",km:21.5,lat:35.3727,lng:139.1743},{n:"新御殿場",km:43.2,lat:35.2898,lng:138.948},
+      {n:"長泉沼津",km:62.3,lat:35.1543,lng:138.8632},{n:"新富士",km:77.4,lat:35.1853,lng:138.7038},
+      {n:"新清水JCT",km:100.5,lat:35.0115,lng:138.5218},{n:"新静岡",km:119.6,lat:34.9521,lng:138.3857},
+      {n:"森掛川",km:166.3,lat:34.8022,lng:137.9942},{n:"浜松浜北",km:194.8,lat:34.8067,lng:137.7749},
+      {n:"三ヶ日JCT",km:212.4,lat:34.7962,lng:137.6061},{n:"浜松いなさJCT",km:217.5,lat:34.8498,lng:137.6254},
+      {n:"新城",km:243.7,lat:34.9071,lng:137.4985},{n:"岡崎東",km:268.2,lat:34.9682,lng:137.2019},
+      {n:"豊田東JCT",km:285.6,lat:35.0898,lng:137.2013}
+    ]
+  },
+  // ── E1A 新名神 ──────────────────────────────────────
+  { id:"shinmeishin", name:"新名神高速道路", short:"新名神", num:"E1A", color:"#FF7043",
+    ics:[
+      {n:"四日市JCT",km:0,lat:34.9565,lng:136.6247},{n:"亀山西JCT",km:18.3,lat:34.883,lng:136.4019},
+      {n:"亀山JCT",km:22.5,lat:34.8692,lng:136.4367},{n:"甲南",km:45.1,lat:34.9285,lng:136.2267},
+      {n:"信楽",km:62.8,lat:34.9127,lng:136.0818},{n:"草津田上",km:82.3,lat:34.9933,lng:135.9594},
+      {n:"大津JCT",km:96.4,lat:35.0088,lng:135.8475},{n:"城陽JCT",km:116.1,lat:34.8543,lng:135.7823},
+      {n:"八幡京田辺JCT",km:124.3,lat:34.8227,lng:135.7447},{n:"高槻JCT",km:137.9,lat:34.8618,lng:135.6187},
+      {n:"茨木千提寺",km:149.2,lat:34.8568,lng:135.5522},{n:"箕面とどろみ",km:158.7,lat:34.8453,lng:135.4834},
+      {n:"川西",km:165.3,lat:34.8285,lng:135.4397},{n:"宝塚北",km:172.8,lat:34.8034,lng:135.3851},
+      {n:"神戸JCT",km:196.4,lat:34.7178,lng:135.2289}
+    ]
+  },
+  // ── E1 名神 ─────────────────────────────────────────
+  { id:"meishin", name:"名神高速道路", short:"名神", num:"E1", color:"#9C27B0",
+    ics:[
+      {n:"小牧JCT",km:0,lat:35.2875,lng:136.9147},{n:"一宮",km:18.3,lat:35.3174,lng:136.7974},
+      {n:"岐阜羽島",km:29.1,lat:35.2956,lng:136.6789},{n:"関ヶ原",km:62.5,lat:35.3617,lng:136.4567},
+      {n:"米原JCT",km:73.2,lat:35.3117,lng:136.2825},{n:"彦根",km:84.5,lat:35.2664,lng:136.2516},
+      {n:"八日市",km:100.2,lat:35.1224,lng:136.1952},{n:"栗東",km:117.8,lat:35.0133,lng:135.9927},
+      {n:"大津",km:128.4,lat:35.0086,lng:135.8756},{n:"京都東",km:142.6,lat:34.9992,lng:135.8126},
+      {n:"京都南",km:150.3,lat:34.9425,lng:135.7464},{n:"茨木",km:165.8,lat:34.8275,lng:135.5799},
+      {n:"吹田JCT",km:172.4,lat:34.7742,lng:135.5248},{n:"豊中",km:176.2,lat:34.7588,lng:135.4716},
+      {n:"西宮",km:189,lat:34.7403,lng:135.3514}
+    ]
+  },
+  // ── E2 山陽道 ────────────────────────────────────────
+  { id:"sanyo", name:"山陽自動車道", short:"山陽道", num:"E2", color:"#F44336",
+    ics:[
+      {n:"神戸JCT",km:0,lat:34.7178,lng:135.2289},{n:"三木東",km:17.5,lat:34.7865,lng:134.9912},
+      {n:"加古川西",km:45.5,lat:34.7424,lng:134.8041},{n:"赤穂",km:68.5,lat:34.7518,lng:134.3931},
+      {n:"備前",km:99.5,lat:34.7207,lng:134.1297},{n:"岡山",km:113.5,lat:34.672,lng:133.8827},
+      {n:"倉敷JCT",km:125.5,lat:34.5888,lng:133.7422},{n:"笠岡",km:151.5,lat:34.504,lng:133.5231},
+      {n:"福山東",km:169.5,lat:34.5038,lng:133.4097},{n:"尾道JCT",km:193.5,lat:34.4069,lng:133.1999},
+      {n:"広島東",km:234.5,lat:34.4348,lng:132.6215},{n:"広島",km:245.5,lat:34.4048,lng:132.5084},
+      {n:"廿日市JCT",km:261.5,lat:34.351,lng:132.2965},{n:"岩国",km:323.5,lat:34.166,lng:132.1395},
+      {n:"下松",km:367.5,lat:34.0228,lng:131.871},{n:"山口",km:409.5,lat:34.186,lng:131.471},
+      {n:"宇部JCT",km:442.5,lat:33.9739,lng:131.2533},{n:"下関",km:466.5,lat:33.9513,lng:130.9406}
+    ]
+  },
+  // ── E2A 中国道 ────────────────────────────────────────
+  { id:"chugoku", name:"中国自動車道", short:"中国道", num:"E2A", color:"#8D6E63",
+    ics:[
+      {n:"吹田JCT",km:0,lat:34.7742,lng:135.5248},{n:"宝塚",km:20.3,lat:34.8009,lng:135.3891},
+      {n:"西宮北",km:30.8,lat:34.853,lng:135.272},{n:"神戸三田",km:46.2,lat:34.9001,lng:135.2233},
+      {n:"滝野社JCT",km:74.5,lat:34.9651,lng:135.0258},{n:"福崎",km:98.2,lat:35.0048,lng:134.8084},
+      {n:"山崎",km:122.4,lat:34.9834,lng:134.5513},{n:"美作",km:149.8,lat:35.0016,lng:134.3348},
+      {n:"院庄",km:162.3,lat:35.0316,lng:134.0393},{n:"落合JCT",km:175.1,lat:35.0706,lng:133.8478},
+      {n:"新見",km:215.3,lat:34.9857,lng:133.477},{n:"東城",km:241.8,lat:34.9254,lng:133.2755},
+      {n:"庄原",km:269.2,lat:34.8572,lng:133.0095},{n:"高田",km:305.8,lat:34.7019,lng:132.6968},
+      {n:"千代田JCT",km:318.4,lat:34.5981,lng:132.7023},{n:"広島北",km:334.1,lat:34.5538,lng:132.5113},
+      {n:"広島JCT",km:343.2,lat:34.4832,lng:132.4766},{n:"廿日市JCT",km:358.7,lat:34.351,lng:132.2965},
+      {n:"玖珂",km:404.2,lat:34.108,lng:132.006},{n:"山口JCT",km:450.1,lat:34.1756,lng:131.3895},
+      {n:"下関",km:489.3,lat:33.9513,lng:130.9406}
+    ]
+  },
+  // ── E3 九州道 ────────────────────────────────────────
+  { id:"kyushu", name:"九州自動車道", short:"九州道", num:"E3", color:"#4CAF50",
+    ics:[
+      {n:"門司",km:0,lat:33.9372,lng:130.9605},{n:"小倉東",km:7.5,lat:33.8837,lng:130.8984},
+      {n:"若宮",km:29.5,lat:33.7942,lng:130.7037},{n:"古賀",km:50.5,lat:33.7174,lng:130.5178},
+      {n:"福岡",km:64.5,lat:33.6082,lng:130.4504},{n:"太宰府",km:73.5,lat:33.5193,lng:130.5289},
+      {n:"鳥栖JCT",km:86.5,lat:33.384,lng:130.5246},{n:"久留米",km:98.5,lat:33.3157,lng:130.4938},
+      {n:"みやま柳川",km:118.5,lat:33.1575,lng:130.4403},{n:"南関",km:135.5,lat:33.1012,lng:130.5361},
+      {n:"熊本",km:164.5,lat:32.8049,lng:130.8086},{n:"松橋",km:187.5,lat:32.6548,lng:130.7239},
+      {n:"八代",km:205.5,lat:32.5235,lng:130.5875},{n:"人吉",km:247.5,lat:32.2025,lng:130.7684},
+      {n:"えびのJCT",km:270.5,lat:32.0394,lng:130.8137},{n:"薩摩吉田",km:316.5,lat:31.7403,lng:130.5745},
+      {n:"鹿児島",km:331.5,lat:31.6474,lng:130.5989}
+    ]
+  },
+  // ── E3A 南九州西回り ─────────────────────────────────
+  { id:"minamikyushu", name:"南九州西回り自動車道", short:"南九州西回り", num:"E3A", color:"#66BB6A",
+    ics:[
+      {n:"八代JCT",km:0,lat:32.5235,lng:130.5875},{n:"芦北",km:18.4,lat:32.4038,lng:130.4874},
+      {n:"水俣",km:39.2,lat:32.2094,lng:130.4132},{n:"出水",km:55.8,lat:32.0988,lng:130.3437},
+      {n:"阿久根北",km:71.3,lat:32.0278,lng:130.2543},{n:"薩摩川内北",km:89.7,lat:31.9148,lng:130.2872},
+      {n:"薩摩川内都",km:96.2,lat:31.8346,lng:130.2714},{n:"串木野さつま",km:111.8,lat:31.7567,lng:130.2887},
+      {n:"市来",km:122.4,lat:31.6985,lng:130.4082},{n:"鹿児島西",km:135.6,lat:31.6292,lng:130.5015}
+    ]
+  },
+  // ── E4 東北道 ────────────────────────────────────────
+  { id:"tohoku", name:"東北自動車道", short:"東北道", num:"E4", color:"#2196F3",
+    ics:[
+      {n:"川口JCT",km:0,lat:35.8088,lng:139.7191},{n:"岩槻",km:17.6,lat:35.9579,lng:139.7119},
+      {n:"久喜",km:47.6,lat:36.0645,lng:139.6691},{n:"加須",km:56.5,lat:36.1303,lng:139.6064},
+      {n:"館林",km:73.5,lat:36.2429,lng:139.5324},{n:"佐野藤岡",km:89.7,lat:36.3362,lng:139.5063},
+      {n:"都賀JCT",km:109.7,lat:36.4412,lng:139.7528},{n:"宇都宮",km:133.8,lat:36.5544,lng:139.8792},
+      {n:"矢板",km:162.9,lat:36.7968,lng:139.9279},{n:"西那須野塩原",km:179.3,lat:36.9439,lng:139.9784},
+      {n:"那須",km:196.3,lat:37.0572,lng:140.1217},{n:"白河",km:218.2,lat:37.1263,lng:140.1846},
+      {n:"郡山",km:264.4,lat:37.3778,lng:140.3455},{n:"福島飯坂",km:330.4,lat:37.7874,lng:140.4762},
+      {n:"白石",km:376.5,lat:38.0045,lng:140.6207},{n:"村田JCT",km:397.5,lat:38.1423,lng:140.7278},
+      {n:"仙台南",km:409.5,lat:38.1857,lng:140.8347},{n:"仙台宮城",km:418.5,lat:38.2594,lng:140.8762},
+      {n:"古川",km:468.5,lat:38.5917,lng:140.9555},{n:"一関",km:543.5,lat:38.9151,lng:141.1351},
+      {n:"水沢",km:562.4,lat:39.0948,lng:141.1302},{n:"北上",km:576.4,lat:39.2892,lng:141.0842},
+      {n:"盛岡",km:626.4,lat:39.6977,lng:141.1748},{n:"青森",km:679.5,lat:40.8283,lng:140.7468}
+    ]
+  },
+  // ── E48 山形道 ────────────────────────────────────────
+  { id:"yamagata", name:"山形自動車道", short:"山形道", num:"E48", color:"#42A5F5",
+    ics:[
+      {n:"村田JCT",km:0,lat:38.1423,lng:140.7278},
+      {n:"宮城川崎IC",km:12.3,lat:38.12,lng:140.698},
+      {n:"笹谷IC",km:28.6,lat:38.1624,lng:140.3614},
+      {n:"山形蔵王IC",km:42.1,lat:38.1961,lng:140.3148},
+      {n:"山形JCT",km:51.4,lat:38.3036,lng:140.3109},
+      {n:"寒河江IC",km:64.0,lat:38.3694,lng:140.2547},
+      {n:"西川IC",km:77.5,lat:38.4167,lng:139.9939},
+      {n:"月山IC",km:95.0,lat:38.4898,lng:139.8818,gap_after:true},
+      {n:"湯殿山IC",km:109.5,lat:38.5850,lng:139.8680},
+      {n:"鶴岡JCT",km:125.2,lat:38.7514,lng:139.7821}
+    ]
+  },
+  // ── E5 道央道 ─────────────────────────────────────────
+  { id:"doo", name:"道央自動車道", short:"道央道", num:"E5", color:"#7E57C2",
+    ics:[
+      {n:"函館",km:0,lat:41.8172,lng:140.8271},{n:"八雲",km:89.2,lat:42.1831,lng:140.2868},
+      {n:"豊浦",km:171.3,lat:42.8097,lng:140.7281},{n:"登別室蘭",km:198.4,lat:42.3952,lng:141.0011},
+      {n:"苫小牧東",km:253.8,lat:42.6468,lng:141.6327},{n:"千歳",km:267.4,lat:42.8296,lng:141.6476},
+      {n:"北広島",km:285.1,lat:43.0396,lng:141.5591},{n:"札幌南",km:299.3,lat:43.0125,lng:141.3836},
+      {n:"札幌",km:306.8,lat:43.0561,lng:141.3248},{n:"札幌北",km:312.4,lat:43.1137,lng:141.3073},
+      {n:"岩見沢",km:342.1,lat:43.2213,lng:141.7755},{n:"砂川",km:381.2,lat:43.483,lng:141.8999},
+      {n:"滝川",km:393.4,lat:43.5552,lng:141.8977},{n:"深川JCT",km:411.6,lat:43.669,lng:142.0248},
+      {n:"旭川鷹栖",km:458.3,lat:43.8024,lng:142.4119},{n:"旭川北",km:464.7,lat:43.8117,lng:142.3767}
+    ]
+  },
+  // ── E6 常磐道 ─────────────────────────────────────────
+  { id:"joban", name:"常磐自動車道", short:"常磐道", num:"E6", color:"#009688",
+    ics:[
+      {n:"三郷JCT",km:0,lat:35.837,lng:139.8568},{n:"柏",km:18.5,lat:35.8644,lng:139.9914},
+      {n:"水戸南",km:110.5,lat:36.3224,lng:140.4385},{n:"水戸",km:121.5,lat:36.3718,lng:140.4753},
+      {n:"日立南太田",km:152.5,lat:36.5491,lng:140.6423},{n:"高萩",km:179.5,lat:36.7097,lng:140.7148},
+      {n:"北茨城",km:193.5,lat:36.8002,lng:140.7631},{n:"いわき勿来",km:209.5,lat:36.9016,lng:140.8197},
+      {n:"いわき",km:228.5,lat:37.0564,lng:140.8925},{n:"広野",km:253.5,lat:37.2286,lng:141.0001},
+      {n:"浪江",km:285.5,lat:37.4827,lng:141.0252},{n:"南相馬鹿島SA",km:303.5,lat:37.6182,lng:140.9981},
+      {n:"山元",km:356.5,lat:37.9578,lng:140.9219},{n:"仙台東",km:379.5,lat:38.2686,lng:141.0066}
+    ]
+  },
+  // ── E7 日本海東北道 ──────────────────────────────────
+  { id:"nihonkai", name:"日本海東北自動車道", short:"日本海東北道", num:"E7", color:"#26C6DA",
+    ics:[
+      {n:"新潟西",km:0,lat:37.8975,lng:139.0085},{n:"聖籠新発田",km:26.8,lat:37.988,lng:139.2064},
+      {n:"中条",km:44.3,lat:38.1022,lng:139.4143},{n:"村上",km:86.4,lat:38.4718,lng:139.5682},
+      {n:"温海",km:112.3,lat:38.6208,lng:139.5919},{n:"鶴岡JCT",km:136.2,lat:38.7514,lng:139.7821},
+      {n:"酒田",km:152.4,lat:38.8953,lng:139.8183},{n:"遊佐",km:165.8,lat:39.0284,lng:139.9078},
+      {n:"象潟",km:181.3,lat:39.1985,lng:140.0432},{n:"本荘",km:198.6,lat:39.3734,lng:140.049},
+      {n:"秋田南",km:228.4,lat:39.6724,lng:140.1048},{n:"秋田中央",km:234.8,lat:39.7183,lng:140.0926},
+      {n:"五城目八郎潟",km:258.3,lat:39.9384,lng:140.0816},{n:"二ツ井白神",km:291.6,lat:40.2108,lng:140.2786},
+      {n:"大館北",km:323.4,lat:40.4134,lng:140.4138},{n:"碇ヶ関",km:341.2,lat:40.4937,lng:140.4718}
+    ]
+  },
+  // ── E8 北陸道 ─────────────────────────────────────────
+  { id:"hokuriku", name:"北陸自動車道", short:"北陸道", num:"E8", color:"#607D8B",
+    ics:[
+      {n:"米原JCT",km:0,lat:35.3117,lng:136.2825},{n:"木之本",km:27.5,lat:35.4606,lng:136.2113},
+      {n:"敦賀",km:48.5,lat:35.6611,lng:136.076},{n:"武生",km:82.5,lat:35.9131,lng:136.165},
+      {n:"福井",km:97.5,lat:36.0661,lng:136.2228},{n:"加賀",km:140.5,lat:36.3002,lng:136.3229},
+      {n:"小松",km:157.5,lat:36.3905,lng:136.456},{n:"金沢東",km:177.5,lat:36.5736,lng:136.6792},
+      {n:"金沢西",km:187.5,lat:36.5786,lng:136.5997},{n:"富山",km:231.5,lat:36.7038,lng:137.1814},
+      {n:"魚津",km:265.5,lat:36.8304,lng:137.4127},{n:"糸魚川",km:316.5,lat:37.0356,lng:137.8617},
+      {n:"上越JCT",km:353.5,lat:37.1335,lng:138.235},{n:"長岡JCT",km:413.5,lat:37.447,lng:138.8394}
+    ]
+  },
+  // ── E10 宮崎道 ────────────────────────────────────────
+  { id:"miyazaki", name:"宮崎自動車道", short:"宮崎道", num:"E10", color:"#FFA726",
+    ics:[
+      {n:"宮崎",km:0,lat:31.9191,lng:131.4319},{n:"宮崎西",km:8.4,lat:31.9481,lng:131.3787},
+      {n:"清武JCT",km:15.2,lat:31.8792,lng:131.3897},{n:"都城北",km:53.8,lat:31.7694,lng:131.0718},
+      {n:"都城",km:61.2,lat:31.7238,lng:131.0622},{n:"高原",km:78.4,lat:31.9267,lng:131.0893},
+      {n:"小林",km:92.1,lat:31.9991,lng:130.9878},{n:"えびの",km:108.4,lat:32.0516,lng:130.8524},
+      {n:"えびのJCT",km:115.3,lat:32.0394,lng:130.8137}
+    ]
+  },
+  // ── E11 高松道 ─────────────────────────────────────────
+  { id:"takamatsu", name:"高松自動車道", short:"高松道", num:"E11", color:"#EC407A",
+    ics:[
+      {n:"鳴門JCT",km:0,lat:34.1672,lng:134.6059},{n:"引田",km:24.3,lat:34.243,lng:134.4453},
+      {n:"志度",km:42.8,lat:34.3241,lng:134.1768},{n:"高松西",km:62.4,lat:34.3547,lng:133.9827},
+      {n:"高松JCT",km:68.1,lat:34.3471,lng:133.9448},{n:"坂出JCT",km:78.4,lat:34.3239,lng:133.8528},
+      {n:"善通寺",km:98.3,lat:34.2383,lng:133.7855},{n:"三豊鳥坂",km:114.2,lat:34.2023,lng:133.6717},
+      {n:"大野原",km:127.6,lat:34.1684,lng:133.6162},{n:"川之江JCT",km:141.3,lat:33.9877,lng:133.5674},
+      {n:"新居浜",km:165.8,lat:33.9555,lng:133.2866},{n:"西条",km:182.4,lat:33.9237,lng:133.1801},
+      {n:"今治小松JCT",km:202.1,lat:34.0022,lng:133.0271},{n:"松山",km:248.6,lat:33.8483,lng:132.7836}
+    ]
+  },
+  // ── E13 東北中央自動車道（相馬福島道路〜横手IC）──────────
+  { id:"tohoku_chuo", name:"東北中央自動車道", short:"東北中央道", num:"E13", color:"#FF8F00",
+    ics:[
+      {n:"相馬IC",km:0,lat:37.7814,lng:140.8969},
+      {n:"相馬山上IC",km:7,lat:37.7705,lng:140.8444},
+      {n:"相馬玉野IC",km:16,lat:37.7735,lng:140.7500},
+      {n:"霊山飯舘IC",km:22,lat:37.7547,lng:140.7038},
+      {n:"霊山IC",km:31,lat:37.7644,lng:140.5915},
+      {n:"伊達中央IC",km:40,lat:37.8122,lng:140.5357},
+      {n:"伊達桑折IC",km:44,lat:37.8286,lng:140.5098},
+      {n:"国見IC",km:51,lat:37.8798,lng:140.5309,gap_after:true},
+      {n:"福島JCT",km:59,lat:37.7481,lng:140.4372},
+      {n:"福島大笹生IC",km:73,lat:37.7281,lng:140.2731},
+      {n:"米沢北IC",km:104,lat:37.9039,lng:140.0986},
+      {n:"米沢中央IC",km:109,lat:37.9358,lng:140.1178},
+      {n:"南陽高畠IC",km:124,lat:38.0243,lng:140.1628},
+      {n:"上山IC",km:146,lat:38.1108,lng:140.2167},
+      {n:"山形JCT",km:168,lat:38.3036,lng:140.3109},
+      {n:"東根北IC",km:195,lat:38.443,lng:140.3538},
+      {n:"大石田村山IC",km:207,lat:38.5581,lng:140.3963},
+      {n:"尾花沢新庄IC",km:219,lat:38.5984,lng:140.4157,gap_after:true},
+      {n:"真室川IC",km:272,lat:38.9758,lng:140.4483},
+      {n:"及位IC",km:279,lat:39.0414,lng:140.4458},
+      {n:"院内IC",km:292,lat:39.1367,lng:140.4817},
+      {n:"横堀IC",km:300,lat:39.1917,lng:140.5017},
+      {n:"湯沢IC",km:308,lat:39.1733,lng:140.482},
+      {n:"十文字IC",km:316,lat:39.2348,lng:140.5207},
+      {n:"横手IC",km:324,lat:39.285,lng:140.5496}
+    ]
+  },
+  // ── E12 道東道 ─────────────────────────────────────────
+  { id:"doto", name:"道東自動車道", short:"道東道", num:"E38", color:"#5C6BC0",
+    ics:[
+      {n:"夕張JCT",km:0,lat:43.0461,lng:141.9814},{n:"占冠",km:42.3,lat:42.9831,lng:142.5284},
+      {n:"十勝清水",km:88.4,lat:43.0116,lng:142.9241},{n:"芽室帯広",km:121.3,lat:42.9001,lng:143.2234},
+      {n:"帯広",km:132.8,lat:42.9061,lng:143.3281},{n:"音更帯広",km:145.2,lat:42.9591,lng:143.4234},
+      {n:"池田",km:169.4,lat:42.9179,lng:143.6131},{n:"本別JCT",km:178.3,lat:43.1019,lng:143.5505},
+      {n:"阿寒",km:224.6,lat:43.1247,lng:144.1034},{n:"釧路",km:252.8,lat:43.0028,lng:144.3522}
+    ]
+  },
+  // ── E17 関越道 ─────────────────────────────────────────
+  { id:"kanetsu", name:"関越自動車道", short:"関越道", num:"E17", color:"#FF9800",
+    ics:[
+      {n:"練馬",km:0,lat:35.7542,lng:139.6053},{n:"所沢",km:16.5,lat:35.7824,lng:139.4566},
+      {n:"狭山",km:24.5,lat:35.8187,lng:139.3893},{n:"東松山",km:53.3,lat:36.0349,lng:139.3993},
+      {n:"高崎",km:105.5,lat:36.3221,lng:139.0153},{n:"渋川伊香保",km:120.5,lat:36.4889,lng:138.9918},
+      {n:"水上",km:154.5,lat:36.7434,lng:138.9929},{n:"湯沢",km:175.5,lat:36.9183,lng:138.822},
+      {n:"六日町",km:193.5,lat:37.0748,lng:138.8813},{n:"小千谷",km:217.5,lat:37.2985,lng:138.7971},
+      {n:"長岡JCT",km:229.5,lat:37.447,lng:138.8394},{n:"三条燕",km:248.5,lat:37.6131,lng:138.9058},
+      {n:"新潟",km:286.5,lat:37.9138,lng:139.0557}
+    ]
+  },
+  // ── E18 上信越道 ──────────────────────────────────────
+  { id:"joshinetsu", name:"上信越自動車道", short:"上信越道", num:"E18", color:"#8BC34A",
+    ics:[
+      {n:"藤岡JCT",km:0,lat:36.2657,lng:139.0763},{n:"松井田妙義",km:30.8,lat:36.2821,lng:138.8017},
+      {n:"碓氷軽井沢",km:50.4,lat:36.3406,lng:138.5729},{n:"佐久",km:79.2,lat:36.2521,lng:138.4893},
+      {n:"小諸",km:91.4,lat:36.3378,lng:138.4245},{n:"東部湯の丸",km:101.8,lat:36.3399,lng:138.2841},
+      {n:"上田菅平",km:121.4,lat:36.4152,lng:138.2638},{n:"坂城",km:132.6,lat:36.4519,lng:138.179},
+      {n:"更埴JCT",km:141.8,lat:36.5256,lng:138.14},{n:"長野",km:154.3,lat:36.6183,lng:138.1865},
+      {n:"信州中野",km:172.8,lat:36.7333,lng:138.2046},{n:"豊田飯山",km:188.4,lat:36.8665,lng:138.2695},
+      {n:"上越JCT",km:216.3,lat:37.1335,lng:138.235}
+    ]
+  },
+  // ── E19 中部横断道 ────────────────────────────────────
+  { id:"chubu", name:"中部横断自動車道", short:"中部横断道", num:"E52", color:"#CDDC39",
+    ics:[
+      {n:"双葉JCT",km:0,lat:35.6867,lng:138.4817},{n:"韮崎",km:18.4,lat:35.712,lng:138.4468},
+      {n:"白根",km:31.2,lat:35.5947,lng:138.4274},{n:"南アルプス",km:42.8,lat:35.5464,lng:138.3822},
+      {n:"増穂",km:54.3,lat:35.4963,lng:138.4027},{n:"富沢",km:68.9,lat:35.3916,lng:138.3847},
+      {n:"新清水JCT",km:98.4,lat:35.0115,lng:138.5218}
+    ]
+  },
+  // ── E20 中央道 ─────────────────────────────────────────
+  { id:"chuo", name:"中央自動車道", short:"中央道", num:"E20", color:"#795548",
+    ics:[
+      {n:"高井戸",km:0,lat:35.6742,lng:139.6121},{n:"調布",km:7.8,lat:35.6519,lng:139.5528},
+      {n:"八王子",km:36.5,lat:35.6396,lng:139.3243},{n:"相模湖",km:50.3,lat:35.6133,lng:139.1654},
+      {n:"大月",km:65.8,lat:35.6098,lng:138.9355},{n:"河口湖",km:86.3,lat:35.5086,lng:138.7597},
+      {n:"甲府昭和",km:106.5,lat:35.6442,lng:138.5659},{n:"諏訪",km:153.5,lat:36.0439,lng:138.1049},
+      {n:"塩尻",km:175.5,lat:36.0941,lng:137.9597},{n:"伊那",km:197.5,lat:35.8278,lng:137.9601},
+      {n:"飯田",km:232.5,lat:35.5075,lng:137.8218},{n:"恵那",km:278.5,lat:35.4483,lng:137.3994},
+      {n:"多治見",km:291.5,lat:35.3636,lng:137.1682},{n:"小牧東",km:332.5,lat:35.2956,lng:136.9807}
+    ]
+  },
+  // ── E23 東名阪道・伊勢道 ─────────────────────────────
+  { id:"tomei_hanshin", name:"東名阪自動車道・伊勢自動車道", short:"東名阪・伊勢道", num:"E23", color:"#F06292",
+    ics:[
+      {n:"名古屋西JCT",km:0,lat:35.1539,lng:136.8434},{n:"弥富",km:18.4,lat:35.0774,lng:136.723},
+      {n:"湾岸桑名",km:31.2,lat:35.056,lng:136.6298},{n:"四日市JCT",km:43.8,lat:34.9565,lng:136.6247},
+      {n:"四日市",km:46.2,lat:34.9665,lng:136.6247},{n:"鈴鹿",km:61.4,lat:34.8819,lng:136.5672},
+      {n:"津",km:78.3,lat:34.7287,lng:136.5139},{n:"久居",km:88.6,lat:34.6562,lng:136.4793},
+      {n:"勢和多気JCT",km:108.4,lat:34.4757,lng:136.454},{n:"伊勢",km:132.8,lat:34.4832,lng:136.7177}
+    ]
+  },
+  // ── E25 西名阪道・名阪国道 ───────────────────────────
+  { id:"nishimeishin", name:"西名阪自動車道・名阪国道", short:"西名阪・名阪", num:"E25", color:"#CE93D8",
+    ics:[
+      {n:"松原JCT",km:0,lat:34.5754,lng:135.5623},{n:"柏原",km:12.8,lat:34.5744,lng:135.6473},
+      {n:"郡山",km:26.4,lat:34.6423,lng:135.7832},{n:"天理",km:35.8,lat:34.5887,lng:135.8519},
+      {n:"天理東",km:38.4,lat:34.5887,lng:135.877},{n:"針",km:56.2,lat:34.5631,lng:136.0104},
+      {n:"名張北",km:74.3,lat:34.6325,lng:136.1115},{n:"伊賀上野",km:92.8,lat:34.7668,lng:136.1333},
+      {n:"大内",km:108.4,lat:34.8098,lng:136.3116},{n:"亀山",km:124.6,lat:34.8563,lng:136.4556}
+    ]
+  },
+  // ── E26 阪和道 ────────────────────────────────────────
+  { id:"hanwa", name:"阪和自動車道", short:"阪和道", num:"E26/E42", color:"#FF8A65",
+    ics:[
+      {n:"松原JCT",km:0,lat:34.5754,lng:135.5623},{n:"堺",km:12.4,lat:34.5214,lng:135.4838},
+      {n:"岸和田和泉",km:25.8,lat:34.4478,lng:135.3524},{n:"貝塚",km:32.4,lat:34.4252,lng:135.3624},
+      {n:"泉佐野JCT",km:38.6,lat:34.4135,lng:135.3169},{n:"阪南",km:51.2,lat:34.356,lng:135.2568},
+      {n:"和歌山北",km:63.8,lat:34.2973,lng:135.2186},{n:"和歌山",km:72.4,lat:34.2173,lng:135.1791},
+      {n:"海南",km:82.6,lat:34.1539,lng:135.1924},{n:"有田",km:98.4,lat:34.0819,lng:135.2214}
+    ]
+  },
+  // ── E27 舞鶴若狭道 ───────────────────────────────────
+  { id:"maizuru", name:"舞鶴若狭自動車道", short:"舞鶴若狭道", num:"E27", color:"#80DEEA",
+    ics:[
+      {n:"吉川JCT",km:0,lat:34.9285,lng:135.1108},{n:"三田西",km:14.2,lat:34.9119,lng:135.1908},
+      {n:"丹南篠山口",km:32.8,lat:35.0564,lng:135.1919},{n:"春日",km:54.6,lat:35.1567,lng:135.1282},
+      {n:"柏原",km:68.4,lat:35.2268,lng:135.0181},{n:"綾部JCT",km:84.2,lat:35.2764,lng:135.3048},
+      {n:"綾部安国寺",km:96.8,lat:35.1975,lng:135.3648},{n:"舞鶴東",km:118.4,lat:35.4547,lng:135.3853},
+      {n:"大飯高浜",km:138.6,lat:35.4857,lng:135.6219},{n:"小浜",km:152.4,lat:35.4857,lng:135.7207},
+      {n:"敦賀JCT",km:186.8,lat:35.6611,lng:136.076}
+    ]
+  },
+  // ── E28 神戸淡路鳴門道 ──────────────────────────────
+  { id:"kobe_naruto", name:"神戸淡路鳴門自動車道", short:"神戸淡路鳴門道", num:"E28", color:"#FFB74D",
+    ics:[
+      {n:"垂水JCT",km:0,lat:34.6278,lng:135.0779},{n:"舞子",km:5.4,lat:34.6241,lng:134.9978},
+      {n:"淡路",km:18.3,lat:34.5541,lng:134.9155},{n:"津名一宮",km:42.8,lat:34.4285,lng:134.7742},
+      {n:"洲本",km:58.4,lat:34.3475,lng:134.8878},{n:"西淡三原",km:68.2,lat:34.3038,lng:134.8278},
+      {n:"南淡",km:78.6,lat:34.2618,lng:134.8061},{n:"鳴門北",km:92.4,lat:34.2127,lng:134.6427},
+      {n:"鳴門",km:102.8,lat:34.1794,lng:134.5799},{n:"鳴門JCT",km:106.4,lat:34.1672,lng:134.6059}
+    ]
+  },
+  // ── E32 高知道 ────────────────────────────────────────
+  { id:"kochi", name:"高知自動車道", short:"高知道", num:"E32/E56", color:"#4DB6AC",
+    ics:[
+      {n:"川之江JCT",km:0,lat:33.9877,lng:133.5674},{n:"大豊",km:42.8,lat:33.8345,lng:133.5738},
+      {n:"南国",km:78.4,lat:33.6046,lng:133.5832},{n:"高知",km:88.6,lat:33.5623,lng:133.5361},
+      {n:"高知西",km:98.4,lat:33.5493,lng:133.4518},{n:"伊野",km:108.2,lat:33.5379,lng:133.3818},
+      {n:"須崎東",km:128.4,lat:33.4046,lng:133.2993},{n:"須崎西",km:134.6,lat:33.3886,lng:133.2714},
+      {n:"窪川",km:162.8,lat:33.2164,lng:133.1083}
+    ]
+  },
+  // ── E34 長崎道 ────────────────────────────────────────
+  { id:"nagasaki", name:"長崎自動車道", short:"長崎道", num:"E34", color:"#F48FB1",
+    ics:[
+      {n:"鳥栖JCT",km:0,lat:33.384,lng:130.5246},{n:"佐賀大和",km:22.4,lat:33.2744,lng:130.3124},
+      {n:"佐賀",km:30.8,lat:33.2483,lng:130.3817},{n:"多久",km:48.4,lat:33.2868,lng:130.1009},
+      {n:"武雄北方",km:64.2,lat:33.1765,lng:130.0229},{n:"武雄JCT",km:68.6,lat:33.1916,lng:130.0429},
+      {n:"嬉野",km:86.4,lat:33.1057,lng:130.0851},{n:"東彼杵",km:108.2,lat:33.0652,lng:129.9956},
+      {n:"大村",km:128.4,lat:32.9421,lng:130.1771},{n:"諫早",km:148.6,lat:32.8546,lng:130.0519},
+      {n:"長崎多良見",km:158.4,lat:32.8487,lng:130.0187},{n:"長崎",km:168.2,lat:32.8057,lng:129.9027}
+    ]
+  },
+  // ── E35 西九州道 ──────────────────────────────────────
+  { id:"nishikyushu", name:"西九州自動車道", short:"西九州道", num:"E35", color:"#BCAAA4",
+    ics:[
+      {n:"武雄JCT",km:0,lat:33.1916,lng:130.0429},{n:"有田",km:18.4,lat:33.1883,lng:129.9088},
+      {n:"伊万里",km:32.8,lat:33.2761,lng:129.8773},{n:"松浦",km:52.4,lat:33.3382,lng:129.7105},
+      {n:"平戸IC",km:60.0,lat:33.3867,lng:129.6536,gap_after:true},
+      {n:"佐々",km:68.6,lat:33.4277,lng:129.6738},{n:"佐世保大塔",km:84.2,lat:33.1777,lng:129.7424},
+      {n:"佐世保",km:94.8,lat:33.1434,lng:129.7253}
+    ]
+  },
+  // ── E38 東九州道 ──────────────────────────────────────
+  { id:"higashikyushu", name:"東九州自動車道", short:"東九州道", num:"E10/E78", color:"#80CBC4",
+    ics:[
+      {n:"北九州JCT",km:0,lat:33.9012,lng:130.8321},{n:"行橋",km:22.4,lat:33.7267,lng:130.9883},
+      {n:"豊前",km:42.8,lat:33.6225,lng:131.137},{n:"宇佐",km:68.4,lat:33.5232,lng:131.4161},
+      {n:"日出JCT",km:98.6,lat:33.3681,lng:131.5285},{n:"大分",km:116.4,lat:33.2352,lng:131.5825},
+      {n:"大分宮河内",km:128.2,lat:33.2019,lng:131.6741},{n:"津久見",km:152.4,lat:32.9949,lng:131.8564},
+      {n:"佐伯",km:168.6,lat:32.9603,lng:131.8995},{n:"蒲江",km:192.4,lat:32.7861,lng:132.0131},
+      {n:"延岡南",km:232.8,lat:32.5928,lng:131.664},{n:"日向",km:252.4,lat:32.4226,lng:131.6186},
+      {n:"清武JCT",km:298.6,lat:31.8792,lng:131.3897}
+    ]
+  },
+  // ── E39 旭川紋別道 ───────────────────────────────────
+  { id:"asahikawa_mombetsu", name:"旭川紋別自動車道", short:"旭川紋別道", num:"E39", color:"#7986CB",
+    ics:[
+      {n:"旭川北",km:0,lat:43.8117,lng:142.3767},{n:"比布北",km:12.4,lat:43.8778,lng:142.3682},
+      {n:"愛別",km:28.6,lat:43.9058,lng:142.5682},{n:"上川層雲峡",km:58.4,lat:43.8436,lng:142.7798},
+      {n:"遠軽瀬戸瀬",km:108.2,lat:44.0576,lng:143.5012},{n:"紋別",km:138.4,lat:44.3497,lng:143.3467}
+    ]
+  },
+  // ── E46 秋田道 ────────────────────────────────────────
+  // 北上JCT〜河辺JCT(E46)。河辺JCT以西は日本海東北道(E7)と共用
+  { id:"akita", name:"秋田自動車道", short:"秋田道", num:"E46", color:"#66BB6A",
+    ics:[
+      {n:"北上JCT",km:0,lat:39.2788,lng:141.079},
+      {n:"湯田IC",km:28.0,lat:39.3151,lng:140.75},
+      {n:"横手IC",km:52.0,lat:39.285,lng:140.5496},
+      {n:"大曲IC",km:72.0,lat:39.4255,lng:140.4287},
+      {n:"河辺JCT",km:108.0,lat:39.6367,lng:140.2133}
+    ]
+  },
+  // ── E46 釜石自動車道 ─────────────────────────────────
+  { id:"kamaishi", name:"釜石自動車道", short:"釜石道", num:"E46", color:"#66BB6A",
+    ics:[
+      {n:"花巻JCT",km:0,lat:39.419,lng:141.1048},
+      {n:"花巻空港IC",km:3.1,lat:39.4081,lng:141.1335},
+      {n:"東和IC",km:11.0,lat:39.3848,lng:141.215},
+      {n:"江刺田瀬IC",km:22.4,lat:39.2923,lng:141.2693},
+      {n:"宮守IC",km:34.2,lat:39.2954,lng:141.4084},
+      {n:"滝観洞IC",km:37.0,lat:39.2379,lng:141.6726},
+      {n:"遠野IC",km:43.8,lat:39.3244,lng:141.5059},
+      {n:"遠野住田IC",km:54.8,lat:39.266,lng:141.5868},
+      {n:"釜石仙人峠IC",km:73.2,lat:39.2527,lng:141.7695},
+      {n:"釜石JCT",km:75.6,lat:39.2577,lng:141.8376}
+    ]
+  },
+
+
+  // ── E41 東海北陸道 ───────────────────────────────────
+  { id:"tokai_hokuriku", name:"東海北陸自動車道", short:"東海北陸道", num:"E41", color:"#DCE775",
+    ics:[
+      {n:"豊田JCT",km:0,lat:35.071,lng:137.1548},{n:"豊田勘八",km:8.4,lat:35.1083,lng:137.1978},
+      {n:"美濃",km:68.4,lat:35.5282,lng:136.9135},{n:"美濃JCT",km:72.8,lat:35.534,lng:136.9135},
+      {n:"白鳥",km:98.4,lat:35.8483,lng:136.9167},{n:"ひるがの高原SA",km:116.2,lat:35.9521,lng:136.8935},
+      {n:"荘川",km:128.4,lat:36.0508,lng:136.8773},{n:"飛騨清見JCT",km:138.6,lat:36.1462,lng:136.9027},
+      {n:"白川郷",km:154.2,lat:36.268,lng:136.8984},{n:"福光",km:192.4,lat:36.5557,lng:136.8633},
+      {n:"小矢部砺波JCT",km:214.8,lat:36.6741,lng:136.8585}
+    ]
+  },
+  // ── E42 紀勢道 ────────────────────────────────────────
+  { id:"kisei", name:"紀勢自動車道", short:"紀勢道", num:"E42", color:"#FFCC02",
+    ics:[
+      {n:"有田",km:0,lat:34.0819,lng:135.2214},{n:"御坊",km:22.8,lat:33.8826,lng:135.1756},
+      {n:"南紀田辺",km:52.4,lat:33.7372,lng:135.3741},{n:"南紀白浜",km:62.8,lat:33.6919,lng:135.3494},
+      {n:"南紀すさみ",km:88.4,lat:33.5445,lng:135.5278},{n:"熊野大泊",km:132.6,lat:33.7368,lng:135.9788},
+      {n:"尾鷲北",km:162.4,lat:34.0701,lng:136.19},{n:"尾鷲南",km:168.2,lat:34.0451,lng:136.2128},
+      {n:"紀伊長島",km:186.4,lat:34.1823,lng:136.2919},{n:"大宮大台",km:208.6,lat:34.3477,lng:136.3449},
+      {n:"勢和多気JCT",km:228.4,lat:34.4757,lng:136.454}
+    ]
+  },
+  // ── E43 近畿道 ────────────────────────────────────────
+  { id:"kinki", name:"近畿自動車道", short:"近畿道", num:"E26", color:"#F8BBD9",
+    ics:[
+      {n:"吹田JCT",km:0,lat:34.7742,lng:135.5248},{n:"門真",km:12.4,lat:34.7257,lng:135.5793},
+      {n:"東大阪",km:18.6,lat:34.6868,lng:135.5888},{n:"松原JCT",km:24.8,lat:34.5754,lng:135.5623}
+    ]
+  },
+  // ── E45 三陸道 ────────────────────────────────────────
+  { id:"sanriku", name:"三陸自動車道", short:"三陸道", num:"E45", color:"#80D8FF",
+    ics:[
+      {n:"仙台東",km:0,lat:38.2686,lng:141.0066},{n:"仙台港北",km:8.4,lat:38.2869,lng:141.0305},
+      {n:"松島北",km:28.6,lat:38.3782,lng:141.1033},{n:"石巻河南",km:52.4,lat:38.4325,lng:141.2218},
+      {n:"桃生豊里",km:72.8,lat:38.5217,lng:141.4164},{n:"登米",km:92.4,lat:38.6813,lng:141.3848},
+      {n:"気仙沼中央",km:132.8,lat:38.9165,lng:141.5694},{n:"大船渡",km:152.4,lat:39.0797,lng:141.7249},
+      {n:"釜石JCT",km:172.6,lat:39.2577,lng:141.8376},{n:"山田",km:188.4,lat:39.4679,lng:141.9577},
+      {n:"宮古",km:208.6,lat:39.6445,lng:141.9593},{n:"久慈",km:268.4,lat:40.1962,lng:141.7745},
+      {n:"八戸JCT",km:318.6,lat:40.4679,lng:141.4576}
+    ]
+  },
+  // ── E49 磐越道 ────────────────────────────────────────
+  { id:"banen", name:"磐越自動車道", short:"磐越道", num:"E49", color:"#A5B4FC",
+    ics:[
+      {n:"いわきJCT",km:0,lat:37.0408,lng:140.8196},{n:"いわき三和",km:18.4,lat:37.1115,lng:140.7398},
+      {n:"小野",km:38.6,lat:37.2206,lng:140.5726},{n:"船引三春",km:52.4,lat:37.3279,lng:140.5012},
+      {n:"郡山JCT",km:68.2,lat:37.4622,lng:140.36},{n:"磐梯熱海",km:82.4,lat:37.4688,lng:140.0793},
+      {n:"会津若松",km:108.6,lat:37.4916,lng:139.9278},{n:"会津坂下",km:132.4,lat:37.5683,lng:139.7264},
+      {n:"西会津",km:148.6,lat:37.6499,lng:139.6128},{n:"津川",km:172.4,lat:37.8258,lng:139.5012},
+      {n:"安田",km:198.6,lat:37.9918,lng:139.2789},{n:"新潟中央JCT",km:218.4,lat:37.8732,lng:139.0472}
+    ]
+  },
+  // ── E50 北関東道 ──────────────────────────────────────
+  { id:"kitakanto", name:"北関東自動車道", short:"北関東道", num:"E50", color:"#D7CCC8",
+    ics:[
+      {n:"高崎JCT",km:0,lat:36.3221,lng:139.0153},{n:"前橋南",km:12.4,lat:36.3397,lng:139.0616},
+      {n:"伊勢崎",km:32.8,lat:36.3118,lng:139.2018},{n:"太田",km:58.4,lat:36.2837,lng:139.4113},
+      {n:"岩舟JCT",km:72.6,lat:36.3279,lng:139.5844},{n:"栃木",km:86.4,lat:36.3903,lng:139.7046},
+      {n:"壬生",km:98.2,lat:36.4024,lng:139.813},{n:"宇都宮上三川",km:112.8,lat:36.5116,lng:139.9274},
+      {n:"真岡",km:128.4,lat:36.4315,lng:140.015},{n:"笠間西",km:148.6,lat:36.3621,lng:140.1817},
+      {n:"友部JCT",km:162.4,lat:36.3521,lng:140.3278},{n:"水戸",km:178.6,lat:36.3718,lng:140.4753}
+    ]
+  },
+  // ── E51 東関東道 ──────────────────────────────────────
+  { id:"higashikanto", name:"東関東自動車道", short:"東関東道", num:"E51", color:"#90CAF9",
+    ics:[
+      {n:"千葉JCT",km:0,lat:35.6136,lng:140.0741},{n:"千葉北",km:8.4,lat:35.6543,lng:140.0976},
+      {n:"四街道",km:18.6,lat:35.6585,lng:140.1695},{n:"佐倉",km:32.4,lat:35.7187,lng:140.2296},
+      {n:"成田JCT",km:48.6,lat:35.7631,lng:140.3618},{n:"下総",km:62.4,lat:35.796,lng:140.4198},
+      {n:"佐原香取",km:78.6,lat:35.8978,lng:140.5268},{n:"潮来",km:92.4,lat:35.9542,lng:140.5742},
+      {n:"水戸南",km:138.6,lat:36.3224,lng:140.4385}
+    ]
+  },
+  // ── E55 徳島道 ────────────────────────────────────────
+  { id:"tokushima", name:"徳島自動車道", short:"徳島道", num:"E11/E32", color:"#4FC3F7",
+    ics:[
+      {n:"徳島",km:0,lat:34.0826,lng:134.5744},{n:"藍住",km:12.4,lat:34.1456,lng:134.5184},
+      {n:"土成",km:28.6,lat:34.1638,lng:134.3706},{n:"脇町",km:42.4,lat:34.1413,lng:134.2237},
+      {n:"美馬",km:56.8,lat:34.1276,lng:134.1013},{n:"井川池田",km:78.4,lat:34.0285,lng:133.9138},
+      {n:"川之江東JCT",km:98.6,lat:33.9877,lng:133.5674}
+    ]
+  },
+  // ── E76 しまなみ海道 ─────────────────────────────────
+  { id:"shimanami", name:"西瀬戸自動車道", short:"しまなみ海道", num:"E76", color:"#E040FB",
+    ics:[
+      {n:"尾道JCT",km:0,lat:34.4069,lng:133.1999},{n:"尾道北",km:4.2,lat:34.4273,lng:133.2271},
+      {n:"向島",km:8.8,lat:34.3876,lng:133.1745},{n:"因島北",km:24.4,lat:34.305,lng:133.187},
+      {n:"因島南",km:32.8,lat:34.2628,lng:133.157},{n:"生口島北",km:42.4,lat:34.3007,lng:133.0745},
+      {n:"生口島南",km:52.6,lat:34.2591,lng:132.9998},{n:"大三島",km:62.8,lat:34.2312,lng:132.9412},
+      {n:"大島北",km:72.4,lat:34.2098,lng:132.9059},{n:"大島南",km:82.6,lat:34.1836,lng:132.9059},
+      {n:"今治北",km:92.8,lat:34.0714,lng:132.9906},{n:"今治小松JCT",km:102.4,lat:34.0022,lng:133.0271}
+    ]
+  },
+  // ── E19 長野道 ────────────────────────────────────────
+  { id:"nagano", name:"長野自動車道", short:"長野道", num:"E19", color:"#A1887F",
+    ics:[
+      {n:"岡谷JCT",km:0,lat:36.0762,lng:137.9808},{n:"塩尻北",km:12.4,lat:36.1102,lng:137.9795},
+      {n:"松本",km:28.6,lat:36.1854,lng:137.9758},{n:"豊科",km:46.4,lat:36.3056,lng:137.9162},
+      {n:"安曇野",km:54.8,lat:36.3287,lng:137.8988},{n:"麻績",km:78.4,lat:36.4658,lng:138.0081},
+      {n:"更埴JCT",km:92.6,lat:36.5256,lng:138.14}
+    ]
+  },
+  // ── E77 中国横断（姫路鳥取線） ───────────────────────
+  { id:"chugoku_himeji", name:"中国横断自動車道姫路鳥取線", short:"播磨道・鳥取道", num:"E29", color:"#7CB342",
+    ics:[
+      {n:"山陽姫路JCT",km:0,lat:34.7424,lng:134.8041},{n:"姫路北",km:12.4,lat:34.8389,lng:134.7034},
+      {n:"播磨新宮",km:32.8,lat:34.9078,lng:134.6688},{n:"山崎JCT",km:48.4,lat:34.9834,lng:134.5513},
+      {n:"志戸坂峠",km:78.6,lat:35.1548,lng:134.1813},{n:"国府",km:108.4,lat:35.4822,lng:134.2174},
+      {n:"鳥取西",km:124.6,lat:35.4815,lng:134.1174},{n:"鳥取",km:132.8,lat:35.4815,lng:134.2174}
+    ]
+  },
+  // ── E80 北近畿豊岡道 ─────────────────────────────────
+  { id:"kitakinki", name:"北近畿豊岡自動車道", short:"北近畿豊岡道", num:"E72", color:"#039BE5",
+    ics:[
+      {n:"春日JCT",km:0,lat:35.1567,lng:135.1282},{n:"福知山",km:22.4,lat:35.2793,lng:135.1196},
+      {n:"和田山",km:48.6,lat:35.3574,lng:134.8703},{n:"養父",km:64.2,lat:35.4052,lng:134.8474},
+      {n:"八鹿氷ノ山",km:76.4,lat:35.4478,lng:134.8241},{n:"日高神鍋高原",km:92.8,lat:35.5059,lng:134.8224},
+      {n:"豊岡",km:108.4,lat:35.5479,lng:134.8024}
+    ]
+  },
+  // ── E82 中国横断（広島浜田線） ───────────────────────
+  { id:"hiroshima_hamada", name:"中国横断自動車道広島浜田線", short:"広島浜田道", num:"E74", color:"#546E7A",
+    ics:[
+      {n:"広島JCT",km:0,lat:34.4832,lng:132.4766},{n:"広島北",km:14.2,lat:34.5538,lng:132.5113},
+      {n:"千代田JCT",km:32.8,lat:34.5981,lng:132.7023},{n:"大朝",km:62.4,lat:34.7101,lng:132.6085},
+      {n:"旭",km:86.8,lat:34.8258,lng:132.2344},{n:"浜田",km:108.4,lat:34.8969,lng:132.074}
+    ]
+  },
+  // ── E83 山陰道 ────────────────────────────────────────
+  { id:"sanin", name:"山陰自動車道", short:"山陰道", num:"E9", color:"#00897B",
+    ics:[
+      {n:"米子JCT",km:0,lat:35.3904,lng:133.2734},{n:"米子",km:8.4,lat:35.4273,lng:133.3276},
+      {n:"中海",km:18.6,lat:35.4629,lng:133.3282},{n:"松江西",km:32.4,lat:35.4671,lng:132.9954},
+      {n:"出雲",km:58.6,lat:35.3686,lng:132.7491},{n:"江津道路",km:112.4,lat:34.9669,lng:132.2273},
+      {n:"浜田JCT",km:132.6,lat:34.8969,lng:132.074}
+    ]
+  },
+  // ── E82 千葉東金道路 ──────────────────────────────────────
+  { id:"chiba_togane", name:"千葉東金道路", short:"千葉東金道", num:"E82", color:"#26A69A",
+    ics:[
+      {n:"蘇我JCT",km:0,lat:35.5629,lng:140.0986},{n:"市原",km:9.0,lat:35.4958,lng:140.1536},
+      {n:"東金",km:24.0,lat:35.5694,lng:140.3633}
+    ]
+  },
+  // ── E83 第三京浜道路・横浜新道 ───────────────────────────
+  { id:"daisankeihin", name:"第三京浜道路・横浜新道", short:"第三京浜", num:"E83", color:"#8D6E63",
+    ics:[
+      {n:"玉川",km:0,lat:35.6065,lng:139.6491},{n:"港北",km:5.2,lat:35.5531,lng:139.5789},
+      {n:"保土ヶ谷",km:15.0,lat:35.4650,lng:139.5982}
+    ]
+  },
+  // ── E84 新湘南バイパス・西湘バイパス ──────────────────────
+  { id:"shinshonan", name:"新湘南バイパス・西湘バイパス", short:"新湘南・西湘", num:"E84", color:"#00ACC1",
+    ics:[
+      {n:"茅ヶ崎JCT",km:0,lat:35.3615,lng:139.4144},{n:"藤沢",km:8.0,lat:35.3404,lng:139.4544},
+      {n:"大磯",km:22.0,lat:35.3082,lng:139.3268},{n:"西湘二宮",km:33.0,lat:35.2980,lng:139.2530},
+      {n:"小田原早川",km:42.0,lat:35.2512,lng:139.1697},{n:"箱根口",km:50.0,lat:35.2295,lng:139.1170}
+    ]
+  },
+  // ── E85 小田原厚木道路 ────────────────────────────────────
+  { id:"oda_ats", name:"小田原厚木道路", short:"小田原厚木道", num:"E85", color:"#F57C00",
+    ics:[
+      {n:"厚木南",km:0,lat:35.4388,lng:139.3459},{n:"伊勢原JCT",km:7.0,lat:35.3987,lng:139.3193},
+      {n:"平塚",km:14.0,lat:35.3520,lng:139.3119},{n:"小田原東",km:30.0,lat:35.2748,lng:139.2008},
+      {n:"小田原",km:35.5,lat:35.2600,lng:139.1583}
+    ]
+  },
+  // ── E86 のと里山海道 ──────────────────────────────────────
+  { id:"noto_satoyama", name:"のと里山海道", short:"のと里山海道", num:"E86", color:"#66BB6A",
+    ics:[
+      {n:"津幡北",km:0,lat:36.6638,lng:136.7210},{n:"かほく",km:8.0,lat:36.7297,lng:136.7023},
+      {n:"高松",km:18.0,lat:36.8167,lng:136.7667},{n:"七尾北",km:60.0,lat:37.0194,lng:136.9389},
+      {n:"穴水",km:95.0,lat:37.2230,lng:136.9064},{n:"徳田大津JCT",km:110.0,lat:37.2812,lng:136.9236}
+    ]
+  },
+  // ── E87 知多半島道路・セントレアライン ────────────────────
+  { id:"chita_centrair", name:"知多半島道路・セントレアライン", short:"知多・空港", num:"E87", color:"#EF9A9A",
+    ics:[
+      {n:"大高",km:0,lat:35.0704,lng:136.9744},{n:"東浦",km:8.0,lat:34.9960,lng:137.0003},
+      {n:"半田中央JCT",km:18.0,lat:34.9108,lng:136.9619},{n:"知多半田",km:22.0,lat:34.8947,lng:136.9406},
+      {n:"南知多",km:37.0,lat:34.7647,lng:136.9095},{n:"セントレア",km:50.0,lat:34.8583,lng:136.8049}
+    ]
+  },
+  // ── E88 京滋バイパス ──────────────────────────────────────
+  { id:"keiji", name:"京滋バイパス", short:"京滋BP", num:"E88", color:"#AB47BC",
+    ics:[
+      {n:"瀬田東JCT",km:0,lat:34.9826,lng:135.9262},{n:"宇治東",km:7.0,lat:34.9003,lng:135.8389},
+      {n:"宇治西JCT",km:11.0,lat:34.8854,lng:135.8011},{n:"久御山淀",km:22.0,lat:34.8614,lng:135.7474},
+      {n:"大山崎JCT",km:35.0,lat:34.9208,lng:135.6821}
+    ]
+  },
+  // ── E89 第二京阪道路 ──────────────────────────────────────
+  { id:"dainikihanro", name:"第二京阪道路", short:"第二京阪", num:"E89", color:"#5C6BC0",
+    ics:[
+      {n:"門真JCT",km:0,lat:34.7272,lng:135.5964},{n:"寝屋川北",km:6.0,lat:34.7636,lng:135.6293},
+      {n:"枚方学研",km:14.0,lat:34.8229,lng:135.6743},{n:"京都南",km:28.0,lat:34.9194,lng:135.7169}
+    ]
+  },
+  // ── E90 堺泉北道路 ───────────────────────────────────────
+  { id:"sakai_senboku", name:"堺泉北道路", short:"堺泉北道", num:"E90", color:"#FF7043",
+    ics:[
+      {n:"堺",km:0,lat:34.5701,lng:135.5044},{n:"石津",km:6.0,lat:34.5289,lng:135.4798},
+      {n:"泉大津南",km:11.0,lat:34.4923,lng:135.4539},{n:"泉北",km:15.0,lat:34.5261,lng:135.4811}
+    ]
+  },
+  // ── E91 南阪奈道路・大和高田バイパス ─────────────────────
+  { id:"nambanna", name:"南阪奈道路・大和高田バイパス", short:"南阪奈道路", num:"E91", color:"#DCE775",
+    ics:[
+      {n:"羽曳野",km:0,lat:34.5527,lng:135.6102},{n:"葛城",km:15.0,lat:34.4902,lng:135.6977},
+      {n:"大和高田",km:20.0,lat:34.5057,lng:135.7381},{n:"橿原",km:28.0,lat:34.4897,lng:135.7831}
+    ]
+  },
+  // ── E92 第二阪奈道路 ──────────────────────────────────────
+  { id:"dainihanna", name:"第二阪奈道路", short:"第二阪奈", num:"E92", color:"#80CBC4",
+    ics:[
+      {n:"西石切JCT",km:0,lat:34.6833,lng:135.6486},{n:"宝来",km:6.0,lat:34.6782,lng:135.7196},
+      {n:"壱分",km:10.0,lat:34.6820,lng:135.7580},{n:"中町",km:13.0,lat:34.7010,lng:135.7896}
+    ]
+  },
+  // ── E93 第二神明道路 ──────────────────────────────────────
+  { id:"daishinmei", name:"第二神明道路", short:"第二神明", num:"E93", color:"#CE93D8",
+    ics:[
+      {n:"須磨",km:0,lat:34.6440,lng:135.0965},{n:"玉津",km:8.0,lat:34.6714,lng:135.1088},
+      {n:"明石",km:18.0,lat:34.6590,lng:134.9975},{n:"加古川",km:30.0,lat:34.7167,lng:134.8521}
+    ]
+  },
+  // ── E94 第二神明北線 ──────────────────────────────────────
+  { id:"daishinmei_kita", name:"第二神明北線", short:"神明北線", num:"E94", color:"#B0BEC5",
+    ics:[
+      {n:"神戸西",km:0,lat:34.7045,lng:135.0347},{n:"伊川谷JCT",km:6.0,lat:34.7244,lng:135.0764},
+      {n:"布施畑JCT",km:10.0,lat:34.7285,lng:135.0478},{n:"箕谷JCT",km:20.0,lat:34.7624,lng:135.1118}
+    ]
+  },
+  // ── E95 播但連絡道路 ──────────────────────────────────────
+  { id:"banshin", name:"播但連絡道路", short:"播但連絡道", num:"E95", color:"#A5D6A7",
+    ics:[
+      {n:"神崎南",km:0,lat:34.9455,lng:134.9218},{n:"神崎北",km:5.0,lat:34.9890,lng:134.9024},
+      {n:"生野",km:35.0,lat:35.1072,lng:134.8383},{n:"和田山",km:75.0,lat:35.3325,lng:134.8754}
+    ]
+  },
+  // ── E96 長崎バイパス ──────────────────────────────────────
+  { id:"nagasaki_bp", name:"長崎バイパス", short:"長崎BP", num:"E96", color:"#F48FB1",
+    ics:[
+      {n:"多良見",km:0,lat:32.9014,lng:129.9658},{n:"古賀",km:5.0,lat:32.8760,lng:129.9311},
+      {n:"女の都",km:12.0,lat:32.8463,lng:129.8891}
+    ]
+  },
+  // ── E97 日出バイパス・大分空港道路 ───────────────────────
+  { id:"hiji_airport", name:"日出バイパス・大分空港道路", short:"日出・空港道", num:"E97", color:"#FFE082",
+    ics:[
+      {n:"大分",km:0,lat:33.2358,lng:131.6133},{n:"日出",km:15.0,lat:33.3573,lng:131.6215},
+      {n:"大分空港",km:30.0,lat:33.4817,lng:131.7308}
+    ]
+  },
+  // ── E98 一ツ葉有料道路 ────────────────────────────────────
+  { id:"hitotsubaya", name:"一ツ葉有料道路", short:"一ツ葉道路", num:"E98", color:"#BCAAA4",
+    ics:[
+      {n:"宮崎",km:0,lat:31.9111,lng:131.4239},{n:"一ツ葉南",km:5.0,lat:31.8781,lng:131.4325},
+      {n:"一ツ葉北",km:12.0,lat:31.8522,lng:131.4424}
+    ]
+  },
+  // ── C1 首都高速都心環状線（東京） ───────────────────────
+  { id:"c1_tokyo", name:"首都高速都心環状線", short:"都心環状", num:"C1", color:"#E53935",
+    ics:[
+      {n:"霞ヶ関",km:0,lat:35.6734,lng:139.7497},{n:"汐留JCT",km:1.8,lat:35.6622,lng:139.7617},
+      {n:"芝公園",km:3.6,lat:35.6572,lng:139.7436},{n:"谷町JCT",km:4.5,lat:35.6567,lng:139.7444},
+      {n:"一之橋JCT",km:6.0,lat:35.6486,lng:139.7492},{n:"箱崎JCT",km:9.0,lat:35.6817,lng:139.7928},
+      {n:"江戸橋JCT",km:10.5,lat:35.6887,lng:139.7852},{n:"竹橋JCT",km:12.1,lat:35.6909,lng:139.7574},
+      {n:"西新宿JCT",km:14.5,lat:35.6948,lng:139.6951},{n:"霞ヶ関（完周）",km:16.0,lat:35.6734,lng:139.7497}
+    ]
+  },
+  // ── C1 名古屋高速都心環状線 ─────────────────────────────
+  { id:"c1_nagoya", name:"名古屋高速都心環状線", short:"名古屋都心環", num:"C1", color:"#D32F2F",
+    ics:[
+      {n:"錦橋",km:0,lat:35.1694,lng:136.9023},{n:"名古屋",km:2.0,lat:35.1659,lng:136.9022},
+      {n:"白川",km:3.5,lat:35.1582,lng:136.9186},{n:"丸田町",km:5.2,lat:35.1704,lng:136.9204},
+      {n:"錦橋（完周）",km:8.0,lat:35.1694,lng:136.9023}
+    ]
+  },
+  // ── C2 首都高速中央環状線（東京） ───────────────────────
+  { id:"c2_tokyo", name:"首都高速中央環状線", short:"中央環状", num:"C2", color:"#FB8C00",
+    ics:[
+      {n:"西池袋",km:0,lat:35.7268,lng:139.7122},{n:"板橋JCT",km:5.0,lat:35.7578,lng:139.7044},
+      {n:"熊野町JCT",km:7.5,lat:35.7382,lng:139.7017},{n:"大橋JCT",km:18.5,lat:35.6573,lng:139.6897},
+      {n:"大井JCT",km:27.0,lat:35.5977,lng:139.7388},{n:"葛西JCT",km:43.0,lat:35.6748,lng:139.8878},
+      {n:"小菅JCT",km:46.0,lat:35.7380,lng:139.8223},{n:"西池袋（完周）",km:47.0,lat:35.7268,lng:139.7122}
+    ]
+  },
+  // ── C2 名古屋第二環状自動車道（名二環） ──────────────────
+  { id:"c2_nagoya", name:"名古屋第二環状自動車道", short:"名二環", num:"C2", color:"#E65100",
+    ics:[
+      {n:"名古屋南JCT",km:0,lat:35.0978,lng:136.9536},{n:"天白",km:4.0,lat:35.1132,lng:136.9683},
+      {n:"名古屋IC",km:10.0,lat:35.1439,lng:136.9729},{n:"守山",km:15.0,lat:35.1889,lng:136.9886},
+      {n:"小牧東JCT",km:30.0,lat:35.2979,lng:136.9428},{n:"一宮",km:45.0,lat:35.2979,lng:136.8428},
+      {n:"名古屋西JCT",km:50.0,lat:35.1839,lng:136.8339},{n:"名古屋南JCT（完周）",km:54.0,lat:35.0978,lng:136.9536}
+    ]
+  },
+  // ── C3 東京外環自動車道 ──────────────────────────────────
+  { id:"c3_gaikan", name:"東京外環自動車道", short:"外環道", num:"C3", color:"#43A047",
+    ics:[
+      {n:"大泉JCT",km:0,lat:35.7721,lng:139.5834},{n:"和光北",km:5.0,lat:35.7903,lng:139.6042},
+      {n:"高島平",km:10.0,lat:35.7756,lng:139.6691},{n:"川口JCT",km:17.5,lat:35.8198,lng:139.7291},
+      {n:"三郷JCT",km:26.0,lat:35.8251,lng:139.8387},{n:"三郷南",km:28.0,lat:35.8069,lng:139.8512},
+      {n:"松戸",km:33.0,lat:35.7839,lng:139.9071},{n:"市川北",km:39.0,lat:35.7268,lng:139.9235},
+      {n:"市川南",km:41.5,lat:35.6997,lng:139.9279},{n:"高谷JCT",km:43.7,lat:35.6828,lng:139.9390}
+    ]
+  },
+  // ── C3 東海環状自動車道 ──────────────────────────────────
+  { id:"c3_tokai", name:"東海環状自動車道", short:"東海環状道", num:"C3", color:"#2E7D32",
+    ics:[
+      {n:"豊田東JCT",km:0,lat:35.1033,lng:137.1677},{n:"豊田藤岡",km:10.0,lat:35.1408,lng:137.1028},
+      {n:"美濃加茂",km:55.0,lat:35.4319,lng:137.0164},{n:"各務原",km:80.0,lat:35.3943,lng:136.8678},
+      {n:"岐阜南",km:95.0,lat:35.3533,lng:136.7867},{n:"大垣西",km:115.0,lat:35.3717,lng:136.5850},
+      {n:"養老",km:135.0,lat:35.1764,lng:136.5906},{n:"四日市JCT",km:153.0,lat:34.9726,lng:136.5941}
+    ]
+  },
+  // ── C4 首都圏中央連絡自動車道（圏央道） ─────────────────
+  { id:"c4_keno", name:"首都圏中央連絡自動車道", short:"圏央道", num:"C4", color:"#00838F",
+    ics:[
+      {n:"高尾山",km:0,lat:35.6264,lng:139.2574},{n:"八王子西",km:5.0,lat:35.6479,lng:139.2964},
+      {n:"圏央厚木",km:40.0,lat:35.4781,lng:139.3416},{n:"海老名JCT",km:48.5,lat:35.4414,lng:139.3888},
+      {n:"茅ヶ崎JCT",km:62.0,lat:35.3615,lng:139.4144},{n:"桶川北本",km:130.0,lat:36.0025,lng:139.4742},
+      {n:"久喜白岡JCT",km:145.0,lat:36.0597,lng:139.5697},{n:"五霞",km:165.0,lat:36.0847,lng:139.7417},
+      {n:"境古河",km:185.0,lat:36.1553,lng:139.8092},{n:"つくばJCT",km:220.0,lat:36.1267,lng:140.0681},
+      {n:"大栄JCT",km:285.0,lat:35.8125,lng:140.3937},{n:"木更津JCT",km:320.0,lat:35.4097,lng:139.9667}
+    ]
+  },
+  // ── CA 東京湾アクアライン・連絡道 ────────────────────────
+  { id:"ca_aquaLine", name:"東京湾アクアライン・連絡道", short:"アクアライン", num:"CA", color:"#00B0FF",
+    ics:[
+      {n:"川崎浮島JCT",km:0,lat:35.5344,lng:139.8037},{n:"海ほたる",km:9.0,lat:35.4725,lng:139.8772},
+      {n:"木更津金田",km:14.6,lat:35.4164,lng:139.9231},{n:"木更津JCT",km:23.0,lat:35.4097,lng:139.9667}
+    ]
+  },
+
+  // ════════════════════════════════════════════════════════
+  //  非NEXCO管理道路（国交省直轄・地方道路公社等）
+  // ════════════════════════════════════════════════════════
+
+  // ── E4A みちのく有料道路（青森県道路公社）────────────────
+  { id:"michinoku", name:"みちのく有料道路", short:"みちのく道路", num:"E4A", color:"#1565C0",
+    ics:[
+      {n:"青森IC",km:0,lat:40.8112,lng:140.6924},
+      {n:"野内IC",km:8.5,lat:40.8197,lng:140.8478},
+      {n:"小湊IC",km:28.0,lat:40.8086,lng:141.0278}
+    ]
+  },
+  // ── E4A 第二みちのく有料道路（青森県道路公社）──────────
+  { id:"dainimichinoku", name:"第二みちのく有料道路", short:"第二みちのく", num:"E4A", color:"#1565C0",
+    ics:[
+      {n:"小湊IC",km:0,lat:40.8086,lng:141.0278},
+      {n:"野辺地IC",km:14.0,lat:40.8419,lng:141.1262},
+      {n:"天間林IC",km:28.0,lat:40.7014,lng:141.1369}
+    ]
+  },
+  // ── E4A 上北自動車道（国土交通省直轄）───────────────────
+  { id:"kamikita", name:"上北自動車道", short:"上北道", num:"E4A", color:"#1565C0",
+    ics:[
+      {n:"天間林IC",km:0,lat:40.7014,lng:141.1369},
+      {n:"七戸IC",km:15.0,lat:40.7333,lng:141.2092},
+      {n:"三沢IC",km:36.0,lat:40.6822,lng:141.3667}
+    ]
+  },
+  // ── E4A 百石道路（国土交通省直轄）──────────────────────
+  { id:"momoshiro", name:"百石道路", short:"百石道路", num:"E4A", color:"#1565C0",
+    ics:[
+      {n:"三沢IC",km:0,lat:40.6822,lng:141.3667},
+      {n:"百石IC",km:10.0,lat:40.6072,lng:141.3789},
+      {n:"八戸北IC",km:20.0,lat:40.5564,lng:141.4322},
+      {n:"八戸JCT",km:30.0,lat:40.4681,lng:141.4516}
+    ]
+  },
+  // ── E4A 八戸自動車道（NEXCO東日本）──────────────────────
+  { id:"hachinohe", name:"八戸自動車道", short:"八戸道", num:"E4A", color:"#1565C0",
+    ics:[
+      {n:"安代JCT",km:0,lat:39.9419,lng:141.1197},
+      {n:"一戸IC",km:13.0,lat:40.2143,lng:141.2989},
+      {n:"福岡IC",km:27.0,lat:40.3736,lng:141.3864},
+      {n:"軽米IC",km:40.0,lat:40.3261,lng:141.4641},
+      {n:"九戸IC",km:52.0,lat:40.3189,lng:141.4892},
+      {n:"八戸JCT",km:65.3,lat:40.4681,lng:141.4516}
+    ]
+  },
+  // ── E5A 函館新道（国土交通省直轄）───────────────────────
+  { id:"hakodate_shindou", name:"函館新道", short:"函館新道", num:"E5A", color:"#673AB7",
+    ics:[
+      {n:"函館IC",km:0,lat:41.7542,lng:140.7553},
+      {n:"北斗追分IC",km:8.5,lat:41.8335,lng:140.6851},
+      {n:"大野IC",km:18.0,lat:41.8347,lng:140.6286}
+    ]
+  },
+  // ── E6 仙台東部道路（国土交通省直轄）──────────────────
+  { id:"sendai_tobu", name:"仙台東部道路", short:"仙台東部道路", num:"E6", color:"#009688",
+    ics:[
+      {n:"亘理IC",km:0,lat:38.0835,lng:140.8871},
+      {n:"岩沼IC",km:5.5,lat:38.1028,lng:140.8895},
+      {n:"仙台空港IC",km:12.8,lat:38.1383,lng:140.8891},
+      {n:"名取IC",km:16.4,lat:38.1795,lng:140.9294},
+      {n:"仙台港北IC",km:24.8,lat:38.2838,lng:140.9931}
+    ]
+  },
+  // ── E6 仙台北部道路（国土交通省直轄）──────────────────
+  { id:"sendai_hokubu", name:"仙台北部道路", short:"仙台北部道路", num:"E6", color:"#009688",
+    ics:[
+      {n:"利府JCT",km:0,lat:38.3167,lng:140.9806},
+      {n:"利府IC",km:3.5,lat:38.3544,lng:140.9831},
+      {n:"富谷IC",km:10.0,lat:38.3868,lng:140.8784}
+    ]
+  },
+  // ── E48 仙台南部道路（国土交通省直轄）─────────────────
+  { id:"sendai_nanbu", name:"仙台南部道路", short:"仙台南部道路", num:"E48", color:"#42A5F5",
+    ics:[
+      {n:"仙台若林JCT",km:0,lat:38.2082,lng:140.9416},
+      {n:"仙台南IC",km:7.0,lat:38.1789,lng:140.8186}
+    ]
+  },
+  // ── E58 沖縄自動車道（沖縄県道路公社）─────────────────
+  { id:"okinawa", name:"沖縄自動車道", short:"沖縄道", num:"E58", color:"#00BCD4",
+    ics:[
+      {n:"那覇IC",km:0,lat:26.2124,lng:127.6811},
+      {n:"西原JCT",km:8.2,lat:26.2373,lng:127.7553},
+      {n:"沖縄南IC",km:16.4,lat:26.3064,lng:127.8075},
+      {n:"沖縄北IC",km:22.5,lat:26.3542,lng:127.8033},
+      {n:"石川IC",km:30.8,lat:26.4358,lng:127.8342},
+      {n:"金武IC",km:38.4,lat:26.4843,lng:127.9108},
+      {n:"宜野座IC",km:43.2,lat:26.5013,lng:127.9728},
+      {n:"許田IC",km:57.0,lat:26.5783,lng:127.9977}
+    ]
+  },
+  // ── E24 京奈和自動車道 ───────────────────────────────
+  { id:"keinawa", name:"京奈和自動車道", short:"京奈和道", num:"E24", color:"#FF7043",
+    ics:[
+      {n:"城陽JCT",km:0,lat:34.8362,lng:135.7703},
+      {n:"城陽IC",km:2.0,lat:34.8257,lng:135.7762},
+      {n:"木津IC",km:10.8,lat:34.7753,lng:135.8117},
+      {n:"木津川IC",km:14.2,lat:34.7522,lng:135.8312,gap_after:true},
+      {n:"田原本北IC",km:28.0,lat:34.5483,lng:135.7917,gap_after:true},
+      {n:"橿原北IC",km:34.6,lat:34.5122,lng:135.7968},
+      {n:"橿原高田IC",km:40.8,lat:34.5083,lng:135.7527,gap_after:true},
+      {n:"五條北IC",km:54.0,lat:34.4447,lng:135.6828},
+      {n:"五條IC",km:60.2,lat:34.3878,lng:135.6853}
+    ]
+  },
+  // ── E44 北海道横断自動車道根室線 ────────────────────
+  { id:"hokkaido_nemuro", name:"北海道横断自動車道根室線", short:"根室線", num:"E44", color:"#4DB6AC",
+    ics:[
+      {n:"釧路東IC",km:0,lat:43.0055,lng:144.4292},
+      {n:"釧路別保IC",km:8.4,lat:43.0048,lng:144.5024},
+      {n:"白糠IC",km:30.2,lat:43.0039,lng:144.7567},
+      {n:"浦幌IC",km:68.4,lat:43.1205,lng:143.6629,gap_after:true},
+      {n:"温根沼IC",km:148.0,lat:43.3542,lng:145.0833},
+      {n:"根室IC",km:155.6,lat:43.3283,lng:145.1333}
+    ]
+  },
+  // ── E54 尾道自動車道・松江自動車道（中国横断道尾道松江線）
+  { id:"onomichi_matsue", name:"中国横断自動車道尾道松江線", short:"尾道・松江道", num:"E54", color:"#78909C",
+    ics:[
+      {n:"尾道JCT",km:0,lat:34.4069,lng:133.1999},
+      {n:"尾道北IC",km:6.8,lat:34.4476,lng:133.2088},
+      {n:"世羅IC",km:26.0,lat:34.5919,lng:133.1512},
+      {n:"吉舎IC",km:46.4,lat:34.7101,lng:133.0295},
+      {n:"三次東JCT",km:66.8,lat:34.8067,lng:132.8894},
+      {n:"甲山IC",km:80.2,lat:34.8623,lng:132.7518},
+      {n:"三刀屋木次IC",km:116.4,lat:35.1892,lng:132.7538},
+      {n:"宍道JCT",km:127.0,lat:35.3683,lng:132.9503}
+    ]
+  },
+  // ── E59 函館江差自動車道 ────────────────────────────
+  { id:"hakodate_esashi", name:"函館江差自動車道", short:"函館江差道", num:"E59", color:"#80CBC4",
+    ics:[
+      {n:"函館JCT",km:0,lat:41.7969,lng:140.7231},
+      {n:"函館IC",km:2.8,lat:41.8133,lng:140.7208},
+      {n:"北斗追分IC",km:12.4,lat:41.8335,lng:140.6851},
+      {n:"北斗茂辺地IC",km:22.6,lat:41.7688,lng:140.5929},
+      {n:"木古内IC",km:34.0,lat:41.6962,lng:140.4487}
+    ]
+  },
+  // ── E60 帯広広尾自動車道 ────────────────────────────
+  { id:"obihiro_hiroo", name:"帯広広尾自動車道", short:"帯広広尾道", num:"E60", color:"#4FC3F7",
+    ics:[
+      {n:"帯広JCT",km:0,lat:42.9664,lng:143.0974},
+      {n:"帯広川西IC",km:7.2,lat:42.8511,lng:143.1742},
+      {n:"幸福IC",km:16.8,lat:42.7509,lng:143.1682},
+      {n:"中札内IC",km:28.4,lat:42.6879,lng:143.1521},
+      {n:"更別IC",km:36.8,lat:42.6502,lng:143.1763},
+      {n:"忠類大樹IC",km:57.4,lat:42.5396,lng:143.2784}
+    ]
+  },
+  // ── E62 深川留萌自動車道 ────────────────────────────
+  { id:"fukagawa_rumoi", name:"深川留萌自動車道", short:"深川留萌道", num:"E62", color:"#90A4AE",
+    ics:[
+      {n:"深川JCT",km:0,lat:43.669,lng:142.0248},
+      {n:"深川西IC",km:7.0,lat:43.7081,lng:142.002},
+      {n:"秩父別IC",km:17.4,lat:43.7686,lng:141.9799},
+      {n:"沼田IC",km:28.8,lat:43.8007,lng:141.9095},
+      {n:"北竜ひまわりIC",km:35.2,lat:43.8301,lng:141.8329},
+      {n:"留萌幌糠IC",km:43.4,lat:43.8527,lng:141.7563},
+      {n:"留萌大和田IC",km:46.6,lat:43.9095,lng:141.6909},
+      {n:"留萌IC",km:49.0,lat:43.9388,lng:141.6696}
+    ]
+  },
+  // ── E63 日高自動車道 ────────────────────────────────
+  { id:"hidaka", name:"日高自動車道", short:"日高道", num:"E63", color:"#A1C4FD",
+    ics:[
+      {n:"苫小牧東IC",km:0,lat:42.7077,lng:141.6519},
+      {n:"沼ノ端東IC",km:4.4,lat:42.6744,lng:141.7378},
+      {n:"苫東中央IC",km:11.8,lat:42.6731,lng:141.7792},
+      {n:"厚真IC",km:22.6,lat:42.6196,lng:141.8409},
+      {n:"鵡川IC",km:40.8,lat:42.5874,lng:141.9331},
+      {n:"日高富川IC",km:54.2,lat:42.5257,lng:142.0437},
+      {n:"日高門別IC",km:64.8,lat:42.4951,lng:142.0825},
+      {n:"日高厚賀IC",km:76.4,lat:42.4338,lng:142.2373}
+    ]
+  },
+  // ── E64 津軽自動車道 ────────────────────────────────
+  { id:"tsugaru", name:"津軽自動車道", short:"津軽道", num:"E64", color:"#CE93D8",
+    ics:[
+      {n:"浪岡IC",km:0,lat:40.7371,lng:140.6045},
+      {n:"五所川原東IC",km:14.8,lat:40.7798,lng:140.4986},
+      {n:"五所川原IC",km:18.6,lat:40.8051,lng:140.4772},
+      {n:"五所川原北IC",km:23.4,lat:40.8275,lng:140.4437},
+      {n:"鰺ヶ沢IC",km:38.0,lat:40.7827,lng:140.2419}
+    ]
+  },
+  // ── E41 能越自動車道（富山県道路公社・国直轄）──────────
+  { id:"noetsu", name:"能越自動車道", short:"能越道", num:"E41", color:"#FFD54F",
+    ics:[
+      {n:"小矢部砺波JCT",km:0,lat:36.7033,lng:136.7833},
+      {n:"小矢部東IC",km:7.2,lat:36.7200,lng:136.8228},
+      {n:"福光IC",km:17.4,lat:36.7550,lng:136.8444},
+      {n:"南砺スマートIC",km:22.8,lat:36.7756,lng:136.8467},
+      {n:"五箇山IC",km:32.4,lat:36.8142,lng:136.8667},
+      {n:"高岡IC",km:44.6,lat:36.7700,lng:137.0017},
+      {n:"高岡北IC",km:51.4,lat:36.8017,lng:136.9433},
+      {n:"福岡IC",km:58.8,lat:36.8433,lng:136.9528},
+      {n:"氷見IC",km:72.4,lat:36.8583,lng:137.0050},
+      {n:"七尾IC",km:89.6,lat:37.0178,lng:137.0200,gap_after:true},
+      {n:"輪島IC",km:117.0,lat:37.3900,lng:136.8983}
+    ]
+  },
+  // ── E55 徳島南部自動車道 ────────────────────────────
+  { id:"tokushima_nanbu", name:"徳島南部自動車道", short:"徳島南部道", num:"E55", color:"#FFAB40",
+    ics:[
+      {n:"徳島JCT",km:0,lat:34.0703,lng:134.5883},
+      {n:"徳島沖洲IC",km:3.2,lat:34.0583,lng:134.5858},
+      {n:"徳島津田IC",km:7.8,lat:34.0278,lng:134.5714},
+      {n:"小松島IC",km:13.6,lat:33.9894,lng:134.5700},
+      {n:"小松島南IC",km:16.4,lat:33.9700,lng:134.5681},
+      {n:"阿南IC",km:19.6,lat:33.9267,lng:134.6600}
+    ]
+  },
+  // ── E81 日光宇都宮道路（栃木県道路公社）─────────────
+  { id:"nikko_utsunomiya", name:"日光宇都宮道路", short:"日光宇都宮道路", num:"E81", color:"#F9A825",
+    ics:[
+      {n:"宇都宮IC",km:0,lat:36.6053,lng:139.8347},
+      {n:"徳次郎IC",km:1.8,lat:36.6169,lng:139.8217},
+      {n:"篠井IC",km:4.6,lat:36.6428,lng:139.8053},
+      {n:"大沢IC",km:11.5,lat:36.7031,lng:139.7667},
+      {n:"土沢IC",km:15.6,lat:36.7372,lng:139.7361},
+      {n:"今市IC",km:20.2,lat:36.7669,lng:139.7083},
+      {n:"日光IC",km:24.7,lat:36.7506,lng:139.6403},
+      {n:"清滝IC",km:30.2,lat:36.7428,lng:139.5847}
+    ]
+  },
+  // ── 第3バッチ追加 ──────────────────────────────────
+  { id:"tokachi_okhotsk", name:"十勝オホーツク自動車道", short:"十勝オホーツク道", num:"E61", color:"#00695C",
+    ics:[
+      {n:"芽室帯広IC",km:0,lat:42.9285,lng:143.1083},
+      {n:"芽室IC",km:8.5,lat:42.9675,lng:143.0492,gap_after:true},
+      {n:"足寄IC",km:58.0,lat:43.2111,lng:143.5606,gap_after:true},
+      {n:"陸別IC",km:98.0,lat:43.5275,lng:143.7339,gap_after:true},
+      {n:"北見西IC",km:148.0,lat:43.7708,lng:143.8579},
+      {n:"北見IC",km:157.0,lat:43.8111,lng:143.9061,gap_after:true},
+      {n:"美幌IC",km:180.0,lat:43.8466,lng:144.1215,gap_after:true},
+      {n:"網走IC",km:200.0,lat:44.0178,lng:144.2736}
+    ]
+  },
+  { id:"shinkuko", name:"新空港自動車道", short:"新空港道路", num:"E65", color:"#F4511E",
+    ics:[
+      {n:"成田JCT",km:0,lat:35.8100,lng:140.3747},
+      {n:"成田IC",km:2.8,lat:35.7900,lng:140.3778},
+      {n:"新空港IC",km:5.8,lat:35.7631,lng:140.3906}
+    ]
+  },
+  { id:"san_en_nanshin", name:"三遠南信自動車道", short:"三遠南信道", num:"E69", color:"#3949AB",
+    ics:[
+      {n:"浜松いなさJCT",km:0,lat:34.9022,lng:137.8281},
+      {n:"浜松いなさIC",km:1.8,lat:34.8989,lng:137.8458},
+      {n:"鳳来峡IC",km:22.5,lat:34.9783,lng:137.9014,gap_after:true},
+      {n:"青崩IC",km:60.0,lat:35.2311,lng:137.9756,gap_after:true},
+      {n:"飯田山本IC",km:85.0,lat:35.5097,lng:137.9644}
+    ]
+  },
+  // ── 第2バッチ追加 ──────────────────────────────────
+  { id:"isewan", name:"伊勢湾岸自動車道", short:"伊勢湾岸道", num:"E1A", color:"#FF8F00",
+    ics:[
+      {n:"豊田東JCT",km:0,lat:35.1444,lng:137.0961},
+      {n:"豊田南IC",km:5.8,lat:35.0847,lng:137.0614},
+      {n:"豊明IC",km:11.3,lat:35.0542,lng:136.9750},
+      {n:"名古屋南JCT",km:22.4,lat:35.0067,lng:136.8944},
+      {n:"名港中央IC",km:28.4,lat:34.9806,lng:136.8697},
+      {n:"飛島IC",km:34.6,lat:35.0119,lng:136.8214},
+      {n:"湾岸弥富IC",km:38.0,lat:35.0392,lng:136.7711},
+      {n:"湾岸長島IC",km:43.2,lat:35.0853,lng:136.7258},
+      {n:"四日市北JCT",km:48.2,lat:35.0083,lng:136.6525},
+      {n:"四日市JCT",km:56.4,lat:34.9758,lng:136.6153}
+    ]
+  },
+  { id:"kanmon", name:"関門自動車道", short:"関門橋", num:"E3", color:"#1976D2",
+    ics:[
+      {n:"下関IC",km:0,lat:33.9458,lng:130.9531},
+      {n:"門司IC",km:6.9,lat:33.9411,lng:130.9994}
+    ]
+  },
+  { id:"kyoto_jukan", name:"京都縦貫自動車道", short:"京都縦貫道", num:"E9", color:"#9C27B0",
+    ics:[
+      {n:"八幡京田辺JCT",km:0,lat:34.8467,lng:135.7567},
+      {n:"久御山淀IC",km:7.5,lat:34.8717,lng:135.7283},
+      {n:"大山崎JCT",km:12.0,lat:34.9006,lng:135.6875},
+      {n:"長岡京IC",km:16.0,lat:34.9239,lng:135.6894},
+      {n:"沓掛IC",km:24.0,lat:34.9781,lng:135.6597},
+      {n:"亀岡IC",km:32.0,lat:35.0083,lng:135.5728},
+      {n:"丹波IC",km:57.0,lat:35.1278,lng:135.5047},
+      {n:"丹波綾部IC",km:64.0,lat:35.2111,lng:135.3986},
+      {n:"綾部JCT",km:71.0,lat:35.2917,lng:135.3042},
+      {n:"宮津天橋立IC",km:107.0,lat:35.5747,lng:135.2286}
+    ]
+  },
+  { id:"sanin_kinki", name:"山陰近畿自動車道", short:"山陰近畿道", num:"E9", color:"#2E7D32",
+    ics:[
+      {n:"宮津天橋立IC",km:0,lat:35.5747,lng:135.2286},
+      {n:"京丹後大宮IC",km:17.5,lat:35.5867,lng:134.9892,gap_after:true},
+      {n:"豊岡IC",km:55.0,lat:35.5475,lng:134.8039,gap_after:true},
+      {n:"浜坂IC",km:105.0,lat:35.6342,lng:134.4389,gap_after:true},
+      {n:"鳥取IC",km:170.0,lat:35.4978,lng:134.2331}
+    ]
+  },
+  { id:"matsuyama", name:"松山自動車道", short:"松山道", num:"E11", color:"#D84315",
+    ics:[
+      {n:"川之江JCT",km:0,lat:33.9831,lng:133.5703},
+      {n:"川之江東JCT",km:2.8,lat:33.9869,lng:133.5917},
+      {n:"新居浜IC",km:21.2,lat:33.9558,lng:133.3103},
+      {n:"西条IC",km:34.8,lat:33.9189,lng:133.1831},
+      {n:"いよ小松IC",km:46.0,lat:33.9064,lng:133.0497},
+      {n:"松山IC",km:73.8,lat:33.8208,lng:132.7747},
+      {n:"松山JCT",km:76.5,lat:33.8083,lng:132.7381},
+      {n:"伊予IC",km:84.8,lat:33.7625,lng:132.7086},
+      {n:"内子五十崎IC",km:93.0,lat:33.6608,lng:132.6414},
+      {n:"大洲IC",km:99.5,lat:33.5311,lng:132.5531},
+      {n:"西予宇和IC",km:122.5,lat:33.3914,lng:132.4803},
+      {n:"宇和島北IC",km:131.2,lat:33.2564,lng:132.5453},
+      {n:"宇和島IC",km:134.5,lat:33.2278,lng:132.5544}
+    ]
+  },
+  { id:"keio_tateyama", name:"京葉道路・館山自動車道・富津館山道路", short:"京葉・館山道", num:"E14", color:"#37474F",
+    ics:[
+      {n:"小松川JCT",km:0,lat:35.6883,lng:139.8556},
+      {n:"一之江IC",km:3.5,lat:35.6900,lng:139.8847},
+      {n:"市川IC",km:8.9,lat:35.7150,lng:139.9428},
+      {n:"船橋IC",km:15.2,lat:35.7072,lng:140.0194},
+      {n:"千葉IC",km:20.8,lat:35.6828,lng:140.1028},
+      {n:"宮野木JCT",km:24.5,lat:35.6594,lng:140.1319},
+      {n:"市原IC",km:34.5,lat:35.5619,lng:140.1186},
+      {n:"木更津JCT",km:48.5,lat:35.4617,lng:139.9764},
+      {n:"木更津南IC",km:54.5,lat:35.4206,lng:139.9869},
+      {n:"君津IC",km:65.5,lat:35.3336,lng:139.9436},
+      {n:"富津中央IC",km:73.5,lat:35.2833,lng:139.9358},
+      {n:"富津竹岡IC",km:81.5,lat:35.2461,lng:139.8828},
+      {n:"鋸南保田IC",km:90.8,lat:35.1483,lng:139.8256},
+      {n:"富浦IC",km:100.8,lat:35.0858,lng:139.8444}
+    ]
+  },
+  { id:"seto_chuo", name:"瀬戸中央自動車道", short:"瀬戸大橋道", num:"E30", color:"#00838F",
+    ics:[
+      {n:"早島IC",km:0,lat:34.5892,lng:133.8228},
+      {n:"倉敷JCT",km:4.0,lat:34.5631,lng:133.7683},
+      {n:"児島IC",km:12.3,lat:34.4867,lng:133.7786},
+      {n:"坂出北IC",km:33.5,lat:34.3506,lng:133.8317},
+      {n:"坂出IC",km:37.3,lat:34.3197,lng:133.8353}
+    ]
+  },
+  { id:"hiroshima_kure", name:"広島呉道路", short:"広島呉道路", num:"E31", color:"#558B2F",
+    ics:[
+      {n:"仁保JCT",km:0,lat:34.3414,lng:132.5067},
+      {n:"仁保IC",km:0.8,lat:34.3369,lng:132.5100},
+      {n:"矢野IC",km:5.2,lat:34.3311,lng:132.5528},
+      {n:"坂北IC",km:8.8,lat:34.3256,lng:132.5942},
+      {n:"阿賀IC",km:12.6,lat:34.2975,lng:132.5944},
+      {n:"呉IC",km:15.9,lat:34.2533,lng:132.5469}
+    ]
+  },
+  { id:"higashi_mito", name:"東水戸道路・ひたちなか有料道路", short:"東水戸・ひたちなか", num:"E50", color:"#795548",
+    ics:[
+      {n:"水戸南IC",km:0,lat:36.3428,lng:140.4714},
+      {n:"中原IC",km:4.0,lat:36.3800,lng:140.5025},
+      {n:"那珂IC",km:7.0,lat:36.3939,lng:140.5303},
+      {n:"ひたちなかIC",km:9.5,lat:36.3919,lng:140.5506},
+      {n:"ひたち海浜公園IC",km:12.5,lat:36.4175,lng:140.5728}
+    ]
+  },
+  { id:"kochi_tobu", name:"高知東部自動車道", short:"高知東部道", num:"E55", color:"#F57C00",
+    ics:[
+      {n:"高知南IC",km:0,lat:33.5172,lng:133.6028},
+      {n:"高知龍馬空港IC",km:3.5,lat:33.5461,lng:133.6697},
+      {n:"南国IC",km:8.2,lat:33.5583,lng:133.6369,gap_after:true},
+      {n:"安芸IC",km:39.0,lat:33.5014,lng:133.9119}
+    ]
+  },
+  { id:"chubu_jukan", name:"中部縦貫自動車道", short:"中部縦貫道", num:"E67", color:"#C62828",
+    ics:[
+      {n:"松本JCT",km:0,lat:36.1894,lng:137.9272},
+      {n:"波田IC",km:5.2,lat:36.2428,lng:137.8914,gap_after:true},
+      {n:"高山IC",km:75.0,lat:36.1528,lng:137.1694},
+      {n:"清見IC",km:98.0,lat:36.1472,lng:136.9872,gap_after:true},
+      {n:"油坂出入口",km:125.0,lat:35.9639,lng:136.8022,gap_after:true},
+      {n:"大野IC",km:138.0,lat:35.9875,lng:136.4908,gap_after:true},
+      {n:"福井北JCT",km:157.0,lat:36.1353,lng:136.2167}
+    ]
+  },
+  { id:"higashi_fujigoko", name:"東富士五湖道路", short:"東富士五湖道路", num:"E68", color:"#283593",
+    ics:[
+      {n:"大月JCT",km:0,lat:35.5978,lng:138.9411},
+      {n:"都留IC",km:8.5,lat:35.5625,lng:138.8978},
+      {n:"富士吉田IC",km:18.7,lat:35.4733,lng:138.7881},
+      {n:"山中湖IC",km:24.7,lat:35.4019,lng:138.8519},
+      {n:"須走IC",km:30.5,lat:35.3633,lng:138.8686},
+      {n:"御殿場JCT",km:43.0,lat:35.3217,lng:138.9375}
+    ]
+  },
+  { id:"izu_jukan", name:"伊豆縦貫自動車道", short:"伊豆縦貫道", num:"E70", color:"#1B5E20",
+    ics:[
+      {n:"長泉沼津IC",km:0,lat:35.1214,lng:138.8814},
+      {n:"大場函南IC",km:8.5,lat:35.0969,lng:138.9567},
+      {n:"函南塚本IC",km:13.0,lat:35.0669,lng:138.9628,gap_after:true},
+      {n:"大仁北IC",km:26.0,lat:34.9942,lng:138.9694},
+      {n:"月ヶ瀬IC",km:32.5,lat:34.9539,lng:138.9356,gap_after:true},
+      {n:"修善寺IC",km:37.0,lat:34.9756,lng:138.9192},
+      {n:"修善寺南IC",km:42.5,lat:34.9286,lng:138.9267,gap_after:true},
+      {n:"河津逆川IC",km:68.0,lat:34.7528,lng:138.9833}
+    ]
+  },
+  { id:"kansai_kuko", name:"関西空港自動車道", short:"関空道", num:"E71", color:"#6A1B9A",
+    ics:[
+      {n:"泉佐野JCT",km:0,lat:34.4039,lng:135.3958},
+      {n:"泉佐野IC",km:1.2,lat:34.3983,lng:135.3989},
+      {n:"りんくうJCT",km:3.5,lat:34.4108,lng:135.2972},
+      {n:"関西空港IC",km:5.8,lat:34.4319,lng:135.2422}
+    ]
+  },
+  { id:"kyushu_chuo", name:"九州中央自動車道", short:"九州中央道", num:"E77", color:"#BF360C",
+    ics:[
+      {n:"嘉島JCT",km:0,lat:32.7219,lng:130.7819},
+      {n:"嘉島IC",km:2.5,lat:32.7083,lng:130.7972},
+      {n:"小池高山IC",km:12.0,lat:32.6658,lng:130.9153,gap_after:true},
+      {n:"山都通潤橋IC",km:31.0,lat:32.5994,lng:131.0069}
+    ]
+  },
+  { id:"abukuma", name:"あぶくま高原道路", short:"あぶくま高原道", num:"E80", color:"#01579B",
+    ics:[
+      {n:"矢吹IC",km:0,lat:37.1891,lng:140.3015},
+      {n:"矢吹中央IC",km:3.5,lat:37.1933,lng:140.3402},
+      {n:"大田原IC",km:7.8,lat:37.1639,lng:140.4136},
+      {n:"平田IC",km:14.0,lat:37.2445,lng:140.558},
+      {n:"石川空港IC",km:21.5,lat:37.1511,lng:140.5400},
+      {n:"石川母畑IC",km:25.2,lat:37.2015,lng:140.4792},
+      {n:"玉川IC",km:29.2,lat:37.2041,lng:140.4072},
+      {n:"小野IC",km:35.9,lat:37.2872,lng:140.6131}
+    ]
+  }
+];
+
+// ═══════════════════════════════════════════════════════════
+//  STATE & STORAGE
+// ═══════════════════════════════════════════════════════════
+let records = JSON.parse(localStorage.getItem('hwy_records') || '[]');
+let map, polylineLayers = {};
+let statsSort = 'num'; // 'num' | 'pct_desc' | 'pct_asc'
+
+// ─── ナンバリングソートキー ──────────────────────────────
+// E1 < E1A < E2 < ... < E98 < C1 < C2 < C3 < C4 < CA
+function numSortKey(num) {
+  const first = num.split('/')[0];
+  if (first.startsWith('C')) {
+    const rest = first.slice(1);
+    if (rest === 'A') return [1, 9999, 0];
+    return [1, parseInt(rest) || 0, 0];
+  }
+  const em = first.match(/^E(\d+)([A-Z]?)$/);
+  if (em) return [0, parseInt(em[1]), em[2] ? 1 : 0];
+  const rm = first.match(/^R(\d+)$/);
+  if (rm) return [2, parseInt(rm[1]), 0];
+  return [3, 0, 0];
+}
+function numCompare(a, b) {
+  const ka = numSortKey(a), kb = numSortKey(b);
+  for (let i = 0; i < 3; i++) { if (ka[i] !== kb[i]) return ka[i] - kb[i]; }
+  return 0;
+}
+
+function saveToStorage() {
+  localStorage.setItem('hwy_records', JSON.stringify(records));
+}
+
+// ═══════════════════════════════════════════════════════════
+//  MAP
+// ═══════════════════════════════════════════════════════════
+function initMap() {
+  map = L.map('map', { zoomControl: false, attributionControl: false }).setView([36.5, 137.0], 5);
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 18 }).addTo(map);
+  L.control.zoom({ position: 'topright' }).addTo(map);
+  L.control.attribution({ position: 'bottomright', prefix: '© OpenStreetMap' }).addTo(map);
+  renderMap();
+  updateMapChip();
+}
+
+function renderMap() {
+  Object.values(polylineLayers).forEach(segs => segs.forEach(p => map.removeLayer(p)));
+  polylineLayers = {};
+  HIGHWAYS.forEach(hw => {
+    const segs = [];
+    for (let i = 0; i < hw.ics.length - 1; i++) {
+      const a = hw.ics[i], b = hw.ics[i+1];
+      const isGap = !!a.gap_after; // 物理的に途切れた区間（未開通等）
+      if (isGap) {
+        // 未開通・途切れ区間：薄いオレンジ点線（走行不能区間として表示）
+        const pl = L.polyline([[a.lat,a.lng],[b.lat,b.lng]], {
+          color: '#FF6F00',
+          weight: 2,
+          opacity: 0.28,
+          dashArray: '4,10'
+        }).addTo(map);
+        pl.bindPopup(`<b style="color:${hw.color}">${hw.short}（${hw.num}）</b><br>${a.n} → ${b.n}<br><span style="color:#FF6F00">🚧 未開通区間</span>`);
+        segs.push(pl);
+      } else {
+        const driven = isSegmentDriven(hw.id, i);
+        const pl = L.polyline([[a.lat,a.lng],[b.lat,b.lng]], {
+          color: driven ? hw.color : '#aaaaaa',
+          weight: driven ? 5 : 2.5,
+          opacity: driven ? 0.92 : 0.45,
+          dashArray: driven ? null : '7,5'
+        }).addTo(map);
+        pl.bindPopup(`<b style="color:${hw.color}">${hw.short}（${hw.num}）</b><br>${a.n} → ${b.n}<br><span style="color:${driven?'#43a047':'#999'}">${driven?'✅ 走行済み':'⬜ 未走行'}</span>`);
+        segs.push(pl);
+      }
+    }
+    polylineLayers[hw.id] = segs;
+  });
+}
+
+function isSegmentDriven(hwId, idx) {
+  // gap_after のある区間は走行済みとして扱わない
+  const hw = HIGHWAYS.find(h => h.id === hwId);
+  if (hw && hw.ics[idx] && hw.ics[idx].gap_after) return false;
+  return records.some(r => r.hw === hwId && idx >= r.s && idx < r.e);
+}
+
+// gap_after:true の区間を除いた走行可能距離を返す
+function calcBuiltKm(hw) {
+  let km = 0;
+  for (let i = 0; i < hw.ics.length - 1; i++) {
+    if (!hw.ics[i].gap_after) km += hw.ics[i+1].km - hw.ics[i].km;
+  }
+  return km;
+}
+
+function calcTotalDrivenKm() {
+  let km = 0;
+  HIGHWAYS.forEach(hw => {
+    const driven = new Set();
+    records.filter(r => r.hw === hw.id).forEach(r => { for(let i=r.s;i<r.e;i++) driven.add(i); });
+    // gap区間は走行距離から除外
+    driven.forEach(i => {
+      if (i < hw.ics.length-1 && !hw.ics[i].gap_after)
+        km += hw.ics[i+1].km - hw.ics[i].km;
+    });
+  });
+  return km;
+}
+
+function updateMapChip() {
+  const t = calcTotalDrivenKm();
+  document.getElementById('map-chip').textContent = t > 0 ? `🚗 累計 ${t.toFixed(0)} km` : '走行済み区間を記録しよう';
+}
+
+// ═══════════════════════════════════════════════════════════
+//  NAVIGATION
+// ═══════════════════════════════════════════════════════════
+function showTab(tab) {
+  document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
+  document.getElementById('nav-'+tab).classList.add('active');
+  document.querySelectorAll('.panel').forEach(el => el.classList.remove('active'));
+  if (tab === 'record') document.getElementById('panel-record').classList.add('active');
+  else if (tab === 'history') { document.getElementById('panel-history').classList.add('active'); renderHistory(); }
+  else if (tab === 'stats') { document.getElementById('panel-stats').classList.add('active'); renderStats(); }
+}
+
+// ═══════════════════════════════════════════════════════════
+//  RECORD FORM
+// ═══════════════════════════════════════════════════════════
+function initForm() {
+  const sel = document.getElementById('sel-highway');
+  const grouped = {};
+  HIGHWAYS.forEach(hw => { (grouped[hw.num] = grouped[hw.num] || []).push(hw); });
+  Object.keys(grouped).sort((a, b) => numCompare(a, b)).forEach(num => {
+    grouped[num].forEach(hw => {
+      const o = document.createElement('option');
+      o.value = hw.id;
+      o.textContent = `${hw.num} ${hw.name}`;
+      sel.appendChild(o);
+    });
+  });
+  document.getElementById('inp-date').value = new Date().toISOString().split('T')[0];
+}
+
+function onHighwayChange() {
+  const hwId = document.getElementById('sel-highway').value;
+  const ss = document.getElementById('sel-start'), se = document.getElementById('sel-end');
+  ss.innerHTML = ''; se.innerHTML = '';
+  if (!hwId) {
+    ss.innerHTML = '<option>先に高速道路を選択</option>';
+    se.innerHTML = '<option>先に高速道路を選択</option>';
+    return;
+  }
+  const hw = HIGHWAYS.find(h => h.id === hwId);
+  hw.ics.forEach((ic, i) => {
+    // gap_after:true のICには「この先未開通」マークを付ける
+    const gapMark = ic.gap_after ? ' 🚧→' : '';
+    ss.add(new Option(`${ic.n}${gapMark}（${ic.km}km）`, i));
+    se.add(new Option(`${ic.n}${gapMark}（${ic.km}km）`, i));
+  });
+  se.value = hw.ics.length - 1;
+}
+
+function saveRecord() {
+  const hwId = document.getElementById('sel-highway').value;
+  const si = parseInt(document.getElementById('sel-start').value);
+  const ei = parseInt(document.getElementById('sel-end').value);
+  const date = document.getElementById('inp-date').value;
+  const memo = document.getElementById('inp-memo').value.trim();
+  if (!hwId) { toast('高速道路を選択してください'); return; }
+  if (isNaN(si)||isNaN(ei)) { toast('ICを選択してください'); return; }
+  if (si === ei) { toast('起点と終点が同じです'); return; }
+  if (!date) { toast('走行日を入力してください'); return; }
+  const hw = HIGHWAYS.find(h => h.id === hwId);
+  const from = Math.min(si,ei), to = Math.max(si,ei);
+  const km = (hw.ics[to].km - hw.ics[from].km).toFixed(1);
+  records.push({ id: Date.now().toString(), hw: hwId, s: from, e: to, date, memo });
+  saveToStorage(); renderMap(); updateMapChip();
+  toast(`${hw.short} ${hw.ics[from].n}〜${hw.ics[to].n}（約${km}km）を記録しました ✅`);
+  document.getElementById('sel-highway').value = '';
+  document.getElementById('sel-start').innerHTML = '<option>先に高速道路を選択</option>';
+  document.getElementById('sel-end').innerHTML = '<option>先に高速道路を選択</option>';
+  document.getElementById('inp-memo').value = '';
+  showTab('map');
+}
+
+// ═══════════════════════════════════════════════════════════
+//  HISTORY
+// ═══════════════════════════════════════════════════════════
+function renderHistory() {
+  const el = document.getElementById('history-list');
+  if (!records.length) {
+    el.innerHTML = '<div class="empty-state"><div class="empty-icon">🛣️</div><div class="empty-text">まだ走行記録がありません<br>「記録」タブから追加してください</div></div>';
+    return;
+  }
+  const sorted = [...records].sort((a,b) => b.date.localeCompare(a.date));
+  let html = '', lastDate = '';
+  sorted.forEach(r => {
+    const hw = HIGHWAYS.find(h => h.id === r.hw);
+    if (!hw) return;
+    const km = (hw.ics[r.e].km - hw.ics[r.s].km).toFixed(1);
+    if (r.date !== lastDate) { html += `<div class="list-section-label">${r.date.replace(/-/g,'/')}</div>`; lastDate = r.date; }
+    html += `<div class="history-item">
+      <div class="hw-badge" style="background:${hw.color}">
+        <span class="hw-badge-name">${hw.short}</span>
+        <span class="hw-badge-num">${hw.num}</span>
+      </div>
+      <div class="history-info">
+        <div class="history-route">${hw.ics[r.s].n} → ${hw.ics[r.e].n}</div>
+        <div class="history-km">約 ${km} km</div>
+        ${r.memo ? `<div class="history-sub">📝 ${r.memo}</div>` : ''}
+      </div>
+      <div class="delete-btn" onclick="deleteRecord('${r.id}')">×</div>
+    </div>`;
+  });
+  el.innerHTML = html;
+}
+
+function deleteRecord(id) {
+  if (!confirm('この記録を削除しますか？')) return;
+  records = records.filter(r => r.id !== id);
+  saveToStorage(); renderMap(); updateMapChip(); renderHistory();
+  toast('記録を削除しました');
+}
+
+// ═══════════════════════════════════════════════════════════
+//  STATS
+// ═══════════════════════════════════════════════════════════
+function setStatsSort(mode) {
+  statsSort = mode;
+  renderStats();
+}
+
+function renderStats() {
+  const hwStats = HIGHWAYS.map(hw => {
+    const driven = new Set();
+    records.filter(r => r.hw === hw.id).forEach(r => { for(let i=r.s;i<r.e;i++) driven.add(i); });
+    let dKm = 0;
+    // gap区間は走行距離から除外
+    driven.forEach(i => {
+      if (i < hw.ics.length-1 && !hw.ics[i].gap_after)
+        dKm += hw.ics[i+1].km - hw.ics[i].km;
+    });
+    const maxKm = calcBuiltKm(hw); // 開通済み区間のみの合計km
+    return { ...hw, dKm, maxKm, pct: maxKm > 0 ? dKm/maxKm*100 : 0 };
+  });
+
+  // 並び替え
+  let sorted;
+  if (statsSort === 'num') {
+    sorted = [...hwStats].sort((a, b) => {
+      const nc = numCompare(a.num, b.num);
+      if (nc !== 0) return nc;
+      return a.name.localeCompare(b.name, 'ja');
+    });
+  } else if (statsSort === 'pct_desc') {
+    sorted = [...hwStats].sort((a, b) => b.pct - a.pct || numCompare(a.num, b.num));
+  } else {
+    sorted = [...hwStats].sort((a, b) => a.pct - b.pct || numCompare(a.num, b.num));
+  }
+
+  const totalDriven = hwStats.reduce((s,h) => s+h.dKm, 0);
+  const totalMax = hwStats.reduce((s,h) => s+h.maxKm, 0);
+  const coverage = totalMax > 0 ? (totalDriven/totalMax*100).toFixed(1) : '0.0';
+  const hwDriven = hwStats.filter(h => h.dKm > 0).length;
+
+  const s = statsSort;
+  document.getElementById('stats-content').innerHTML = `
+    <div class="stats-grid">
+      <div class="stats-card"><div class="stats-label">総走行距離</div><div class="stats-value">${totalDriven.toFixed(0)}<span class="stats-unit"> km</span></div></div>
+      <div class="stats-card"><div class="stats-label">路線カバー率</div><div class="stats-value">${coverage}<span class="stats-unit"> %</span></div></div>
+      <div class="stats-card"><div class="stats-label">記録件数</div><div class="stats-value">${records.length}<span class="stats-unit"> 件</span></div></div>
+      <div class="stats-card"><div class="stats-label">走行した路線数</div><div class="stats-value">${hwDriven}<span class="stats-unit"> / ${HIGHWAYS.length}</span></div></div>
+    </div>
+    <div class="stats-section-card">
+      <div class="stats-section-title">路線別走行状況</div>
+      <div class="sort-bar">
+        <button class="sort-btn${s==='num'?' active':''}" onclick="setStatsSort('num')">🔢 番号順</button>
+        <button class="sort-btn${s==='pct_desc'?' active':''}" onclick="setStatsSort('pct_desc')">📉 走行率高い順</button>
+        <button class="sort-btn${s==='pct_asc'?' active':''}" onclick="setStatsSort('pct_asc')">📈 走行率低い順</button>
+      </div>
+      ${sorted.map(h => `
+        <div class="hw-stat-row">
+          <div class="hw-stat-badge" style="background:${h.color}"><span>${h.short}</span></div>
+          <div class="hw-stat-info">
+            <div class="hw-stat-name">${h.num} ${h.name}</div>
+            <div class="hw-stat-bar-bg"><div class="hw-stat-bar" style="width:${h.pct}%;background:${h.color}"></div></div>
+            <div class="hw-stat-km">${h.dKm.toFixed(1)} / ${h.maxKm.toFixed(1)} km（${h.pct.toFixed(1)}%）</div>
+          </div>
+        </div>`).join('')}
+    </div>`;
+}
+
+// ═══════════════════════════════════════════════════════════
+//  DATA EXPORT / IMPORT
+// ═══════════════════════════════════════════════════════════
+function exportData() {
+  if (!records.length) { toast('記録がまだありません'); return; }
+  const data = {
+    version: 1,
+    exportedAt: new Date().toISOString(),
+    records: records
+  };
+  const json = JSON.stringify(data, null, 2);
+  const blob = new Blob([json], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  const date = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+  a.href = url;
+  a.download = `highway_records_${date}.json`;
+  a.click();
+  URL.revokeObjectURL(url);
+  toast(`${records.length}件のデータを書き出しました 📤`);
+}
+
+function importData(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    try {
+      const data = JSON.parse(e.target.result);
+      // バージョン1形式チェック
+      const imported = Array.isArray(data.records) ? data.records : data;
+      if (!Array.isArray(imported)) throw new Error('形式エラー');
+      // IDの重複を避けてマージ
+      const existingIds = new Set(records.map(r => r.id));
+      const newRecs = imported.filter(r => r.hw && !existingIds.has(r.id));
+      records = [...records, ...newRecs];
+      saveToStorage();
+      renderMap();
+      updateMapChip();
+      toast(`${newRecs.length}件を読み込みました ✅`);
+    } catch {
+      toast('ファイルの形式が正しくありません ❌');
+    }
+    event.target.value = '';
+  };
+  reader.readAsText(file);
+}
+
+// ═══════════════════════════════════════════════════════════
+//  X SHARE
+// ═══════════════════════════════════════════════════════════
+function shareToX() {
+  const hwStats = HIGHWAYS.map(hw => {
+    const driven = new Set();
+    records.filter(r => r.hw === hw.id).forEach(r => { for(let i=r.s;i<r.e;i++) driven.add(i); });
+    let dKm = 0;
+    driven.forEach(i => {
+      if (i < hw.ics.length-1 && !hw.ics[i].gap_after)
+        dKm += hw.ics[i+1].km - hw.ics[i].km;
+    });
+    return { ...hw, dKm, maxKm: calcBuiltKm(hw) };
+  });
+  const totalDriven = hwStats.reduce((s,h) => s+h.dKm, 0);
+  const totalMax = hwStats.reduce((s,h) => s+h.maxKm, 0);
+  const coverage = totalMax > 0 ? (totalDriven/totalMax*100).toFixed(1) : '0.0';
+  const hwDriven = hwStats.filter(h => h.dKm > 0).length;
+  // 走行率100%の路線
+  const completed = hwStats.filter(h => h.maxKm > 0 && h.dKm >= h.maxKm);
+  let completedText = '';
+  if (completed.length > 0) {
+    completedText = '\n🏆 走破済み：' + completed.slice(0, 3).map(h => h.short).join('、') + (completed.length > 3 ? ` 他${completed.length-3}路線` : '');
+  }
+  const text = `🚗 高速道路走行記録\n📍 累計 ${totalDriven.toFixed(0)} km\n📊 カバー率 ${coverage}%\n🛣️ ${hwDriven} / ${HIGHWAYS.length} 路線走行済み${completedText}\n#高速走行記録 #ドライブ #高速道路`;
+  const url = `https://twitter.com/intent/tweet?text=${encodeURIComponent(text)}`;
+  window.open(url, '_blank', 'noopener');
+}
+
+// ═══════════════════════════════════════════════════════════
+//  TOAST & BOOT
+// ═══════════════════════════════════════════════════════════
+let toastTimer;
+function toast(msg) {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => el.classList.remove('show'), 3200);
+}
+
+window.addEventListener('load', () => { initMap(); initForm(); });
+
+// ── Service Worker 登録 ──────────────────────────────────────
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('./sw.js').catch(() => {});
+}
+</script>
+</body>
+</html>

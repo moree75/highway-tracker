@@ -1,0 +1,27 @@
+{
+  "name": "高速走行記録",
+  "short_name": "高速記録",
+  "description": "日本の高速道路の走行記録を地図上で管理できるアプリ。走行済み区間を記録して走破率を確認しよう。",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#f0f2f5",
+  "theme_color": "#1565C0",
+  "lang": "ja",
+  "categories": ["travel", "navigation"],
+  "icons": [
+    {
+      "src": "icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}
