@@ -64,8 +64,6 @@
     .legend-line{width:22px;height:3px;border-radius:2px}
     .legend-text{color:#555;font-weight:500}
     .header-chip{position:absolute;top:10px;right:10px;background:rgba(255,255,255,.92);border-radius:20px;padding:6px 12px;z-index:400;box-shadow:0 2px 8px rgba(0,0,0,.12);font-size:12px;font-weight:700;color:#1565C0}
-    .show-all-btn{position:absolute;top:10px;left:10px;background:rgba(255,255,255,.92);border:none;border-radius:20px;padding:6px 13px;z-index:400;box-shadow:0 2px 8px rgba(0,0,0,.15);font-size:12px;font-weight:700;color:#555;cursor:pointer;font-family:inherit;transition:background .2s,color .2s}
-    .show-all-btn.active{background:#FF6F00;color:#fff;box-shadow:0 2px 10px rgba(255,111,0,.4)}
     .empty-state{text-align:center;padding:60px 24px;color:#bbb}
     .empty-icon{font-size:52px;margin-bottom:14px}
     .empty-text{font-size:14px;line-height:1.6}
@@ -127,25 +125,6 @@
     .hw-selected-bar{display:none;padding:10px 14px;border:1.5px solid #43a047;border-radius:10px;background:#f1f8e9;font-size:14px;font-weight:700;color:#2e7d32;align-items:center;justify-content:space-between;margin-top:6px}
     .hw-selected-bar.show{display:flex}
     .hw-clear-btn{background:none;border:none;cursor:pointer;color:#9e9e9e;font-size:22px;line-height:1;padding:0 2px;font-family:inherit}
-    /* ── 座標編集モード ── */
-    .coord-edit-fab{position:absolute;bottom:80px;right:12px;z-index:1000;background:#fff;border:2px solid #e0e0e0;border-radius:24px;padding:8px 14px;font-size:13px;font-weight:700;cursor:pointer;box-shadow:0 2px 8px rgba(0,0,0,.18);color:#555;display:flex;align-items:center;gap:5px;transition:all .18s}
-    .coord-edit-fab.active{background:#E65100;border-color:#E65100;color:#fff}
-    .coord-edit-panel{display:none;position:absolute;top:12px;left:12px;right:12px;z-index:1100;background:#fff;border-radius:14px;box-shadow:0 4px 20px rgba(0,0,0,.22);padding:14px 16px;max-height:calc(100vh - 100px);overflow-y:auto}
-    .coord-edit-panel.show{display:block}
-    .coord-edit-title{font-size:15px;font-weight:800;color:#E65100;margin-bottom:10px;display:flex;align-items:center;justify-content:space-between}
-    .coord-edit-hw-sel{width:100%;padding:9px 12px;border:1.5px solid #e0e0e0;border-radius:8px;font-size:14px;font-family:inherit;margin-bottom:10px}
-    .coord-edit-actions{display:flex;gap:8px;margin-bottom:10px}
-    .coord-edit-btn{flex:1;padding:9px;border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit}
-    .coord-edit-btn.start{background:#1565C0;color:#fff}
-    .coord-edit-btn.stop{background:#757575;color:#fff}
-    .coord-edit-btn.copy{background:#2E7D32;color:#fff}
-    .coord-edit-changes{background:#f5f5f5;border-radius:8px;padding:10px;font-size:12px;font-family:monospace;white-space:pre-wrap;max-height:200px;overflow-y:auto;color:#333;margin-top:8px}
-    .coord-edit-hint{font-size:12px;color:#888;margin-top:6px;line-height:1.5}
-    .coord-edit-ic-list{max-height:160px;overflow-y:auto;margin-bottom:8px}
-    .coord-edit-ic-row{display:flex;align-items:center;justify-content:space-between;padding:5px 6px;border-radius:6px;font-size:12px;border-bottom:1px solid #eee}
-    .coord-edit-ic-row.changed{background:#fff3e0}
-    .coord-edit-ic-name{font-weight:600;flex:1}
-    .coord-edit-ic-coords{color:#888;font-family:monospace;font-size:11px}
   </style>
 </head>
 <body>
@@ -156,28 +135,7 @@
     <div class="legend-row"><div class="legend-line" style="background:#E91E63;height:4px"></div><span class="legend-text">走行済み</span></div>
   </div>
   <div class="header-chip" id="map-chip">地図を読込中…</div>
-  <button class="show-all-btn" id="show-all-btn" onclick="toggleShowAll()">🗺️ 全路線表示</button>
   <div class="profile-fab" id="profile-fab" onclick="openProfileModal()">👤 読込中</div>
-  <!-- 座標編集FAB -->
-  <button class="coord-edit-fab" id="coord-edit-fab" onclick="toggleCoordEdit()">📍 座標編集</button>
-  <!-- 座標編集パネル -->
-  <div class="coord-edit-panel" id="coord-edit-panel">
-    <div class="coord-edit-title">
-      <span>📍 IC座標編集モード</span>
-      <button class="hw-clear-btn" onclick="toggleCoordEdit()">×</button>
-    </div>
-    <select class="coord-edit-hw-sel" id="coord-edit-hw-sel">
-      <option value="">路線を選択…</option>
-    </select>
-    <div class="coord-edit-actions">
-      <button class="coord-edit-btn start" onclick="startCoordEdit()">▶ 編集開始</button>
-      <button class="coord-edit-btn stop" onclick="stopCoordEdit()">■ 終了</button>
-      <button class="coord-edit-btn copy" onclick="copyCoordChanges()">📋 変更をコピー</button>
-    </div>
-    <div class="coord-edit-ic-list" id="coord-edit-ic-list"></div>
-    <div class="coord-edit-changes" id="coord-edit-changes">（変更なし）</div>
-    <div class="coord-edit-hint">マーカーをドラッグして座標を修正 → 「変更をコピー」でJSONをコピー → Claudeに貼り付け</div>
-  </div>
 </div>
 <nav class="bottom-nav">
   <div class="nav-item active" onclick="showTab('map')" id="nav-map"><span class="nav-icon">🗺️</span><span>地図</span></div>
@@ -2842,15 +2800,7 @@ let activeProfileId;
 // ═══════════════════════════════════════════════════════════
 let records = JSON.parse(localStorage.getItem('hwy_records_' + activeProfileId) || '[]');
 let map, polylineLayers = {};
-let showAllMode = false;
 
-function toggleShowAll() {
-  showAllMode = !showAllMode;
-  const btn = document.getElementById('show-all-btn');
-  btn.textContent = showAllMode ? '✅ 全路線表示中' : '🗺️ 全路線表示';
-  btn.classList.toggle('active', showAllMode);
-  renderMap();
-}
 let statsSort = 'num'; // 'num' | 'pct_desc' | 'pct_asc'
 
 // ─── ナンバリングソートキー ──────────────────────────────
@@ -2910,7 +2860,7 @@ function renderMap() {
         segs.push(pl);
       } else {
         const driven = isSegmentDriven(hw.id, i);
-        const show = showAllMode || driven;
+        const show = driven;
         const pl = L.polyline([[a.lat,a.lng],[b.lat,b.lng]], {
           color: show ? hw.color : '#aaaaaa',
           weight: show ? 5 : 2.5,
@@ -3441,121 +3391,7 @@ function toast(msg) {
   toastTimer = setTimeout(() => el.classList.remove('show'), 3200);
 }
 
-window.addEventListener('load', () => { initMap(); initForm(); initCoordEdit(); });
-
-// ── 座標編集モード ────────────────────────────────────────────
-let coordEditActive = false;
-let coordEditMarkers = [];
-let coordChanges = {}; // {hwId: {icIndex: {n,km,lat,lng}}}
-
-function initCoordEdit() {
-  const sel = document.getElementById('coord-edit-hw-sel');
-  HIGHWAYS.forEach(hw => {
-    const opt = document.createElement('option');
-    opt.value = hw.id;
-    opt.textContent = `${hw.num} ${hw.name}`;
-    sel.appendChild(opt);
-  });
-}
-
-function toggleCoordEdit() {
-  const panel = document.getElementById('coord-edit-panel');
-  const fab = document.getElementById('coord-edit-fab');
-  coordEditActive = !coordEditActive;
-  panel.classList.toggle('show', coordEditActive);
-  fab.classList.toggle('active', coordEditActive);
-  if (!coordEditActive) stopCoordEdit();
-}
-
-function startCoordEdit() {
-  stopCoordEdit();
-  const hwId = document.getElementById('coord-edit-hw-sel').value;
-  if (!hwId) { alert('路線を選択してください'); return; }
-  const hw = HIGHWAYS.find(h => h.id === hwId);
-  if (!hw) return;
-
-  // 地図をICの中心に移動
-  const midIc = hw.ics[Math.floor(hw.ics.length / 2)];
-  map.setView([midIc.lat, midIc.lng], 12);
-
-  hw.ics.forEach((ic, i) => {
-    const marker = L.marker([ic.lat, ic.lng], {
-      draggable: true,
-      zIndexOffset: 2000,
-      icon: L.divIcon({
-        className: '',
-        html: `<div style="background:#E65100;color:#fff;padding:2px 7px;border-radius:10px;font-size:11px;font-weight:700;white-space:nowrap;box-shadow:0 1px 4px rgba(0,0,0,.4)">${ic.n}</div>`,
-        iconAnchor: [0, 10]
-      })
-    }).addTo(map);
-
-    marker.on('dragend', function(e) {
-      const pos = e.target.getLatLng();
-      if (!coordChanges[hwId]) coordChanges[hwId] = {};
-      coordChanges[hwId][i] = {
-        n: ic.n,
-        km: ic.km,
-        lat: Math.round(pos.lat * 1000000) / 1000000,
-        lng: Math.round(pos.lng * 1000000) / 1000000
-      };
-      renderCoordChanges();
-    });
-
-    coordEditMarkers.push(marker);
-  });
-
-  renderCoordIcList(hw);
-}
-
-function stopCoordEdit() {
-  coordEditMarkers.forEach(m => map.removeLayer(m));
-  coordEditMarkers = [];
-  document.getElementById('coord-edit-ic-list').innerHTML = '';
-}
-
-function renderCoordIcList(hw) {
-  const list = document.getElementById('coord-edit-ic-list');
-  list.innerHTML = hw.ics.map((ic, i) => {
-    const changed = coordChanges[hw.id] && coordChanges[hw.id][i];
-    const lat = changed ? changed.lat : ic.lat;
-    const lng = changed ? changed.lng : ic.lng;
-    return `<div class="coord-edit-ic-row${changed ? ' changed' : ''}">
-      <span class="coord-edit-ic-name">${changed ? '✏️ ' : ''}${ic.n}</span>
-      <span class="coord-edit-ic-coords">${lat}, ${lng}</span>
-    </div>`;
-  }).join('');
-}
-
-function renderCoordChanges() {
-  const hwId = document.getElementById('coord-edit-hw-sel').value;
-  const hw = HIGHWAYS.find(h => h.id === hwId);
-  const changes = coordChanges[hwId];
-  if (!changes || Object.keys(changes).length === 0) {
-    document.getElementById('coord-edit-changes').textContent = '（変更なし）';
-    return;
-  }
-  const out = Object.entries(changes).map(([i, c]) => {
-    return `{"id":"${hwId}","i":${i},"n":"${c.n}","km":${c.km},"lat":${c.lat},"lng":${c.lng}}`;
-  }).join(',\n');
-  document.getElementById('coord-edit-changes').textContent = `[\n${out}\n]`;
-  if (hw) renderCoordIcList(hw);
-}
-
-function copyCoordChanges() {
-  const text = document.getElementById('coord-edit-changes').textContent;
-  if (text === '（変更なし）') { alert('変更がありません'); return; }
-  navigator.clipboard.writeText(text).then(() => {
-    showToast('📋 変更内容をコピーしました');
-  }).catch(() => {
-    // フォールバック: テキスト選択
-    const el = document.getElementById('coord-edit-changes');
-    const range = document.createRange();
-    range.selectNodeContents(el);
-    window.getSelection().removeAllRanges();
-    window.getSelection().addRange(range);
-    showToast('テキストを選択しました。手動でコピーしてください');
-  });
-}
+window.addEventListener('load', () => { initMap(); initForm(); });
 
 // ── Service Worker 登録 ──────────────────────────────────────
 if ('serviceWorker' in navigator) {
