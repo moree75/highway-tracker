@@ -2886,7 +2886,9 @@ function isSegmentDriven(hwId, idx) {
 function calcBuiltKm(hw) {
   let km = 0;
   for (let i = 0; i < hw.ics.length - 1; i++) {
-    if (!hw.ics[i].gap_after) km += hw.ics[i+1].km - hw.ics[i].km;
+    if (!hw.ics[i].gap_after &&
+        hw.ics[i].km !== undefined && hw.ics[i+1].km !== undefined)
+      km += hw.ics[i+1].km - hw.ics[i].km;
   }
   return km;
 }
@@ -2898,7 +2900,8 @@ function calcTotalDrivenKm() {
     records.filter(r => r.hw === hw.id).forEach(r => { for(let i=r.s;i<r.e;i++) driven.add(i); });
     // gap区間は走行距離から除外
     driven.forEach(i => {
-      if (i < hw.ics.length-1 && !hw.ics[i].gap_after)
+      if (i < hw.ics.length-1 && !hw.ics[i].gap_after &&
+          hw.ics[i].km !== undefined && hw.ics[i+1].km !== undefined)
         km += hw.ics[i+1].km - hw.ics[i].km;
     });
   });
@@ -3143,7 +3146,8 @@ function renderStats() {
     let dKm = 0;
     // gap区間は走行距離から除外
     driven.forEach(i => {
-      if (i < hw.ics.length-1 && !hw.ics[i].gap_after)
+      if (i < hw.ics.length-1 && !hw.ics[i].gap_after &&
+          hw.ics[i].km !== undefined && hw.ics[i+1].km !== undefined)
         dKm += hw.ics[i+1].km - hw.ics[i].km;
     });
     const maxKm = calcBuiltKm(hw); // 開通済み区間のみの合計km
@@ -3256,7 +3260,8 @@ function shareToX() {
     records.filter(r => r.hw === hw.id).forEach(r => { for(let i=r.s;i<r.e;i++) driven.add(i); });
     let dKm = 0;
     driven.forEach(i => {
-      if (i < hw.ics.length-1 && !hw.ics[i].gap_after)
+      if (i < hw.ics.length-1 && !hw.ics[i].gap_after &&
+          hw.ics[i].km !== undefined && hw.ics[i+1].km !== undefined)
         dKm += hw.ics[i+1].km - hw.ics[i].km;
     });
     return { ...hw, dKm, maxKm: calcBuiltKm(hw) };
