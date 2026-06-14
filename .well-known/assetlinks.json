@@ -1,0 +1,10 @@
+[{
+  "relation": ["delegate_permission/common.handle_all_urls"],
+  "target": {
+    "namespace": "android_app",
+    "package_name": "io.github.moree75.highwaytracker",
+    "sha256_cert_fingerprints": [
+      "E2:C9:FD:7F:37:66:F5:72:68:9F:1D:5C:59:73:08:0B:5D:E2:AB:52:CF:8B:0E:77:0F:94:98:78:A1:DE:46:BC"
+    ]
+  }
+}]
