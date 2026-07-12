@@ -125,9 +125,24 @@
     .hw-selected-bar{display:none;padding:10px 14px;border:1.5px solid #43a047;border-radius:10px;background:#f1f8e9;font-size:14px;font-weight:700;color:#2e7d32;align-items:center;justify-content:space-between;margin-top:6px}
     .hw-selected-bar.show{display:flex}
     .hw-clear-btn{background:none;border:none;cursor:pointer;color:#9e9e9e;font-size:22px;line-height:1;padding:0 2px;font-family:inherit}
+    /* ── アップデート通知バナー ────────────────────── */
+    .update-banner{position:fixed;top:0;left:0;width:100%;z-index:9999;background:#1565C0;color:#fff;padding:14px 16px;display:flex;align-items:center;gap:10px;box-shadow:0 3px 12px rgba(0,0,0,.2);transform:translateY(-110%);transition:transform .35s ease}
+    .update-banner.show{transform:translateY(0)}
+    .update-banner-text{flex:1;font-size:13px;font-weight:600;line-height:1.4}
+    .update-banner-btns{display:flex;gap:8px;flex-shrink:0}
+    .update-btn-now{background:#fff;color:#1565C0;border:none;border-radius:8px;padding:8px 14px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit}
+    .update-btn-later{background:rgba(255,255,255,.2);color:#fff;border:none;border-radius:8px;padding:8px 12px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit}
   </style>
 </head>
 <body>
+<!-- アップデート通知バナー -->
+<div class="update-banner" id="update-banner">
+  <div class="update-banner-text">🆙 新しいバージョンが利用可能です</div>
+  <div class="update-banner-btns">
+    <button class="update-btn-now" id="update-btn-now">今すぐ更新</button>
+    <button class="update-btn-later" id="update-btn-later">後で</button>
+  </div>
+</div>
 <div id="map-container">
   <div id="map"></div>
   <div class="map-legend">
@@ -3398,9 +3413,43 @@ function toast(msg) {
 
 window.addEventListener('load', () => { initMap(); initForm(); });
 
-// ── Service Worker 登録 ──────────────────────────────────────
+// ── Service Worker 登録 & アップデート検知 ────────────────────
 if ('serviceWorker' in navigator) {
-  navigator.serviceWorker.register('./sw.js').catch(() => {});
+  let waitingWorker = null;
+
+  navigator.serviceWorker.register('./sw.js').then(reg => {
+    // 登録直後にすでに waiting 中のSWがあれば通知（まれなケース）
+    if (reg.waiting && navigator.serviceWorker.controller) {
+      waitingWorker = reg.waiting;
+      showUpdateBanner();
+    }
+    // 新しいSWが検出されたとき
+    reg.addEventListener('updatefound', () => {
+      const newWorker = reg.installing;
+      newWorker.addEventListener('statechange', () => {
+        if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+          waitingWorker = newWorker;
+          showUpdateBanner();
+        }
+      });
+    });
+  }).catch(() => {});
+
+  // SW切り替え後にページをリロードして新バージョンを反映
+  let reloading = false;
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    if (!reloading) { reloading = true; window.location.reload(); }
+  });
+
+  function showUpdateBanner() {
+    document.getElementById('update-banner').classList.add('show');
+    document.getElementById('update-btn-now').onclick = () => {
+      if (waitingWorker) waitingWorker.postMessage({ type: 'SKIP_WAITING' });
+    };
+    document.getElementById('update-btn-later').onclick = () => {
+      document.getElementById('update-banner').classList.remove('show');
+    };
+  }
 }
 </script>
 </body>
