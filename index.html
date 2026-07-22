@@ -35,7 +35,16 @@
     .form-select:focus,.form-input:focus{outline:none;border-color:#007B43;background:#fff}
     .btn-primary{width:100%;padding:15px;background:#007B43;color:#fff;border:none;border-radius:12px;font-size:16px;font-weight:700;cursor:pointer;font-family:inherit;box-shadow:0 3px 8px rgba(0,123,67,.35)}
     .btn-primary:active{background:#005c32}
-    .history-item{background:#fff;margin:8px 12px;border-radius:14px;padding:14px 16px;box-shadow:0 1px 4px rgba(0,0,0,.07);display:flex;align-items:center;gap:14px}
+    .history-item{background:#fff;margin:8px 12px;border-radius:14px;padding:14px 16px;box-shadow:0 1px 4px rgba(0,0,0,.07);display:flex;align-items:center;gap:14px;cursor:pointer}
+    .history-item:active{background:#f5f5f5}
+    /* ── 編集モーダル ─────────────────────────────────── */
+    .edit-overlay{position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:3000;display:none;align-items:flex-end}
+    .edit-overlay.show{display:flex}
+    .edit-sheet{background:#fff;border-radius:20px 20px 0 0;width:100%;max-height:85vh;overflow-y:auto;padding-bottom:env(safe-area-inset-bottom,12px)}
+    .edit-sheet-header{display:flex;align-items:center;justify-content:space-between;padding:18px 18px 12px;border-bottom:1px solid #eee;position:sticky;top:0;background:#fff;z-index:1}
+    .edit-sheet-title{font-size:17px;font-weight:700;color:#222}
+    .edit-sheet-body{padding:16px 16px 8px}
+    .edit-hw-label{font-size:13px;font-weight:700;color:#007B43;margin-bottom:16px;padding:10px 12px;background:#e6f4ee;border-radius:10px}
     .hw-badge{width:48px;height:48px;border-radius:10px;display:flex;flex-direction:column;align-items:center;justify-content:center;flex-shrink:0}
     .hw-badge-name{color:#fff;font-size:10px;font-weight:800;line-height:1.2;text-align:center}
     .hw-badge-num{color:rgba(255,255,255,.85);font-size:9px;font-weight:600}
@@ -228,6 +237,22 @@
         <input type="text" class="profile-new-input" id="profile-new-input" placeholder="例: 2024年、車A、家族旅行" maxlength="20">
         <button class="profile-new-btn" onclick="createProfile(document.getElementById('profile-new-input').value)">作成</button>
       </div>
+    </div>
+  </div>
+</div>
+<div class="edit-overlay" id="edit-overlay" onclick="if(event.target===this)closeEditModal()">
+  <div class="edit-sheet">
+    <div class="edit-sheet-header">
+      <div class="edit-sheet-title">記録を編集</div>
+      <button class="profile-close-btn" onclick="closeEditModal()">✕</button>
+    </div>
+    <div class="edit-sheet-body">
+      <div class="edit-hw-label" id="edit-hw-label"></div>
+      <div class="form-group"><label class="form-label">乗ったIC・JCT（起点）</label><select class="form-select" id="edit-sel-start"></select></div>
+      <div class="form-group"><label class="form-label">降りたIC・JCT（終点）</label><select class="form-select" id="edit-sel-end"></select></div>
+      <div class="form-group"><label class="form-label">走行日</label><input type="date" class="form-input" id="edit-inp-date"></div>
+      <div class="form-group"><label class="form-label">メモ（任意）</label><input type="text" class="form-input" id="edit-inp-memo" placeholder="例：家族旅行、帰省など"></div>
+      <button class="btn-primary" onclick="saveEditRecord()">変更を保存</button>
     </div>
   </div>
 </div>
@@ -2840,6 +2865,13 @@ function numCompare(a, b) {
   for (let i = 0; i < 3; i++) { if (ka[i] !== kb[i]) return ka[i] - kb[i]; }
   return 0;
 }
+// 複数ナンバリング（例: "E26/E42"）から若い番号を返す
+function primaryNum(num) {
+  const parts = num.split('/');
+  if (parts.length === 1) return parts[0];
+  return [...parts].sort((a, b) => numCompare(a, b))[0];
+}
+let editingRecordId = null;
 
 function saveToStorage() {
   localStorage.setItem('hwy_records_' + activeProfileId, JSON.stringify(records));
@@ -3013,7 +3045,7 @@ function openHwDropdown() {
   } else {
     dd.innerHTML = filtered.map(hw =>
       `<div class="hw-drop-item" onmousedown="selectHighway('${hw.id}')">
-        <span class="hw-drop-num" style="background:${hw.color}">${hw.num}</span>
+        <span class="hw-drop-num" style="background:${hw.color}">${primaryNum(hw.num)}</span>
         <span>${hw.name}</span>
       </div>`
     ).join('');
@@ -3033,7 +3065,7 @@ function selectHighway(hwId) {
   if (!hw) return;
   document.getElementById('hw-search').value = '';
   closeHwDropdown();
-  document.getElementById('hw-selected-label').textContent = `🛣 ${hw.num}  ${hw.name}`;
+  document.getElementById('hw-selected-label').textContent = `${primaryNum(hw.num)}  ${hw.name}`;
   document.getElementById('hw-selected-bar').classList.add('show');
   onHighwayChange();
 }
@@ -3118,20 +3150,67 @@ function renderHistory() {
     if (!hw) return;
     const km = (hw.ics[r.e].km - hw.ics[r.s].km).toFixed(1);
     if (r.date !== lastDate) { html += `<div class="list-section-label">${r.date.replace(/-/g,'/')}</div>`; lastDate = r.date; }
-    html += `<div class="history-item">
+    html += `<div class="history-item" onclick="openEditModal('${r.id}')">
       <div class="hw-badge" style="background:${hw.color}">
         <span class="hw-badge-name">${hw.short}</span>
-        <span class="hw-badge-num">${hw.num}</span>
+        <span class="hw-badge-num">${primaryNum(hw.num)}</span>
       </div>
       <div class="history-info">
         <div class="history-route">${hw.ics[r.s].n} → ${hw.ics[r.e].n}</div>
         <div class="history-km">約 ${km} km</div>
-        ${r.memo ? `<div class="history-sub">📝 ${r.memo}</div>` : ''}
+        ${r.memo ? `<div class="history-sub">${r.memo}</div>` : ''}
       </div>
-      <div class="delete-btn" onclick="deleteRecord('${r.id}')">×</div>
+      <div class="delete-btn" onclick="event.stopPropagation();deleteRecord('${r.id}')">×</div>
     </div>`;
   });
   el.innerHTML = html;
+}
+
+// ─── 記録編集 ────────────────────────────────────────────
+function openEditModal(recordId) {
+  const r = records.find(rec => rec.id === recordId);
+  if (!r) return;
+  editingRecordId = recordId;
+  const hw = HIGHWAYS.find(h => h.id === r.hw);
+  if (!hw) return;
+  document.getElementById('edit-hw-label').textContent = `${primaryNum(hw.num)}  ${hw.name}`;
+  const ss = document.getElementById('edit-sel-start');
+  const se = document.getElementById('edit-sel-end');
+  ss.innerHTML = '';
+  se.innerHTML = '';
+  hw.ics.forEach((ic, i) => {
+    const gapMark = ic.gap_after ? ' 🚧→' : '';
+    ss.add(new Option(`${ic.n}${gapMark}（${ic.km}km）`, i));
+    se.add(new Option(`${ic.n}${gapMark}（${ic.km}km）`, i));
+  });
+  ss.value = r.s;
+  se.value = r.e;
+  document.getElementById('edit-inp-date').value = r.date;
+  document.getElementById('edit-inp-memo').value = r.memo || '';
+  document.getElementById('edit-overlay').classList.add('show');
+}
+
+function closeEditModal() {
+  document.getElementById('edit-overlay').classList.remove('show');
+  editingRecordId = null;
+}
+
+function saveEditRecord() {
+  if (!editingRecordId) return;
+  const idx = records.findIndex(r => r.id === editingRecordId);
+  if (idx === -1) return;
+  const si = parseInt(document.getElementById('edit-sel-start').value);
+  const ei = parseInt(document.getElementById('edit-sel-end').value);
+  const date = document.getElementById('edit-inp-date').value;
+  const memo = document.getElementById('edit-inp-memo').value.trim();
+  if (isNaN(si) || isNaN(ei)) { toast('ICを選択してください'); return; }
+  if (si === ei) { toast('起点と終点が同じです'); return; }
+  if (!date) { toast('走行日を入力してください'); return; }
+  const from = Math.min(si, ei), to = Math.max(si, ei);
+  records[idx] = { ...records[idx], s: from, e: to, date, memo };
+  saveToStorage(); renderMap(); updateMapChip(); renderHistory(); renderStats();
+  closeEditModal();
+  toast('記録を更新しました');
 }
 
 function deleteRecord(id) {
@@ -3210,7 +3289,7 @@ function renderStats() {
         <div class="hw-stat-row">
           <div class="hw-stat-badge" style="background:${h.color}"><span>${h.short}</span></div>
           <div class="hw-stat-info">
-            <div class="hw-stat-name">${h.num} ${h.name}</div>
+            <div class="hw-stat-name">${primaryNum(h.num)} ${h.name}</div>
             <div class="hw-stat-bar-bg"><div class="hw-stat-bar" style="width:${h.pct}%;background:${h.color}"></div></div>
             <div class="hw-stat-km">${h.dKm.toFixed(1)} / ${h.maxKm.toFixed(1)} km（${h.pct.toFixed(1)}%）</div>
           </div>
