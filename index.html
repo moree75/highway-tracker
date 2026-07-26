@@ -75,6 +75,9 @@
     .legend-line{width:22px;height:3px;border-radius:2px}
     .legend-text{color:#555;font-weight:500}
     .header-chip{position:absolute;top:10px;right:10px;background:rgba(255,255,255,.92);border-radius:20px;padding:6px 12px;z-index:400;box-shadow:0 2px 8px rgba(0,0,0,.12);font-size:12px;font-weight:700;color:#007B43}
+    .map-mode-btn{position:absolute;top:98px;left:10px;z-index:400;background:rgba(255,255,255,.92);border:none;border-radius:12px;padding:6px 10px;font-size:10px;font-weight:700;color:#555;cursor:pointer;box-shadow:0 2px 8px rgba(0,0,0,.12);font-family:inherit;line-height:1.4;text-align:center;min-width:40px}
+    .map-mode-btn.active{background:#007B43;color:#fff}
+    #map.schematic-mode{background:#f0ede8 !important}
     .empty-state{text-align:center;padding:60px 24px;color:#bbb}
     .empty-icon{font-size:52px;margin-bottom:14px}
     .empty-text{font-size:14px;line-height:1.6}
@@ -156,6 +159,7 @@
 </div>
 <div id="map-container">
   <div id="map"></div>
+  <button class="map-mode-btn" id="map-mode-btn" onclick="toggleMapMode()">路線図<br>モード</button>
   <div class="map-legend">
     <div class="legend-row"><div style="width:22px;height:2px;border-top:2px dashed #aaa"></div><span class="legend-text">未走行</span></div>
     <div class="legend-row"><div class="legend-line" style="background:#E91E63;height:4px"></div><span class="legend-text">走行済み</span></div>
@@ -2321,21 +2325,36 @@ const HIGHWAYS = [
       {n:"根室IC",km:155.6,lat:43.315544,lng:145.551021}
     ]
   },
-  // ── E54 尾道自動車道・松江自動車道（中国横断道尾道松江線）
-  { id:"onomichi_matsue", name:"中国横断自動車道尾道松江線", short:"尾道・松江道", num:"E54", color:"#78909C",
+  // ── E54 尾道自動車道 ────────────────────────────────
+  { id:"onomichi", name:"尾道自動車道", short:"尾道道", num:"E54", color:"#78909C",
     ics:[
-      {n:"尾道JCT",km:0.0,lat:34.458897,lng:133.197621},{n:"尾道北IC",km:7.0,lat:34.511213,lng:133.166448},{n:"世羅IC",km:19.2,lat:34.590257,lng:133.091153},
-      {n:"甲奴IC",km:31.5,lat:34.688579,lng:133.045604},{n:"吉舎IC",km:39.6,lat:34.734803,lng:132.981149},{n:"三良坂IC",km:44.0,lat:34.756488,lng:132.943951},
-      {n:"三次東JCT",km:60.5,lat:34.811167,lng:132.911556},{n:"三次東IC",km:65.4,lat:34.81117,lng:132.91156},{n:"口和IC",km:73.8,lat:34.916887,lng:132.881807},
-      {n:"高野IC",km:86.3,lat:35.023719,lng:132.879943},{n:"雲南吉田IC",km:105.1,lat:35.169133,lng:132.828527},{n:"吉田掛合IC",km:109.2,lat:35.198952,lng:132.844865},
-      {n:"三刀屋木次IC",km:121.5,lat:35.296245,lng:132.890007},{n:"雲南加茂SIC",km:126.0,lat:35.330563,lng:132.894313},
-      {n:"宍道JCT",km:132.4,lat:35.38708,lng:132.88220},
-      {n:"宍道IC",km:134.4,lat:35.39400,lng:132.90262},
-      {n:"松江玉造IC",km:147.2,lat:35.43341,lng:133.03519},
-      {n:"松江西IC",km:148.0,lat:35.43434,lng:133.04427},
-      {n:"松江中央IC",km:149.2,lat:35.44045,lng:133.05579},
-      {n:"松江東IC",km:151.7,lat:35.44855,lng:133.08152},
-      {n:"松江JCT",km:152.9,lat:35.45032,lng:133.09405}
+      {n:"尾道JCT",km:0.0,lat:34.458897,lng:133.197621},
+      {n:"尾道北IC",km:7.0,lat:34.511213,lng:133.166448},
+      {n:"世羅IC",km:19.2,lat:34.590257,lng:133.091153},
+      {n:"甲奴IC",km:31.5,lat:34.688579,lng:133.045604},
+      {n:"吉舎IC",km:39.6,lat:34.734803,lng:132.981149},
+      {n:"三良坂IC",km:44.0,lat:34.756488,lng:132.943951},
+      {n:"三次東JCT",km:60.5,lat:34.811167,lng:132.911556}
+    ]
+  },
+  // ── E54 松江自動車道 ────────────────────────────────
+  { id:"matsue", name:"松江自動車道", short:"松江道", num:"E54", color:"#78909C",
+    ics:[
+      {n:"三次東JCT",km:0.0,lat:34.811167,lng:132.911556},
+      {n:"三次東IC",km:4.9,lat:34.81117,lng:132.91156},
+      {n:"口和IC",km:13.3,lat:34.916887,lng:132.881807},
+      {n:"高野IC",km:25.8,lat:35.023719,lng:132.879943},
+      {n:"雲南吉田IC",km:44.6,lat:35.169133,lng:132.828527},
+      {n:"吉田掛合IC",km:48.7,lat:35.198952,lng:132.844865},
+      {n:"三刀屋木次IC",km:61.0,lat:35.296245,lng:132.890007},
+      {n:"雲南加茂SIC",km:65.5,lat:35.330563,lng:132.894313},
+      {n:"宍道JCT",km:71.9,lat:35.38708,lng:132.88220},
+      {n:"宍道IC",km:73.9,lat:35.39400,lng:132.90262},
+      {n:"松江玉造IC",km:86.7,lat:35.43341,lng:133.03519},
+      {n:"松江西IC",km:87.5,lat:35.43434,lng:133.04427},
+      {n:"松江中央IC",km:88.7,lat:35.44045,lng:133.05579},
+      {n:"松江東IC",km:91.2,lat:35.44855,lng:133.08152},
+      {n:"松江JCT",km:92.4,lat:35.45032,lng:133.09405}
     ]
   },
   // ── E59 函館江差自動車道 ────────────────────────────
@@ -2841,7 +2860,7 @@ let activeProfileId;
 //  STATE & STORAGE
 // ═══════════════════════════════════════════════════════════
 let records = JSON.parse(localStorage.getItem('hwy_records_' + activeProfileId) || '[]');
-let map, polylineLayers = {};
+let map, polylineLayers = {}, tileLayer = null, mapMode = 'map';
 
 let statsSort = 'num'; // 'num' | 'pct_desc' | 'pct_asc'
 
@@ -2871,6 +2890,13 @@ function primaryNum(num) {
   if (parts.length === 1) return parts[0];
   return [...parts].sort((a, b) => numCompare(a, b))[0];
 }
+// 複数ナンバリング路線の色：若い番号の単独エントリの色を使う
+function hwColor(hw) {
+  if (!hw.num.includes('/')) return hw.color;
+  const primary = primaryNum(hw.num);
+  const ref = HIGHWAYS.find(h => h.id !== hw.id && h.num === primary);
+  return ref ? ref.color : hw.color;
+}
 let editingRecordId = null;
 
 function saveToStorage() {
@@ -2882,11 +2908,29 @@ function saveToStorage() {
 // ═══════════════════════════════════════════════════════════
 function initMap() {
   map = L.map('map', { zoomControl: false, attributionControl: false }).setView([36.5, 137.0], 5);
-  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 18 }).addTo(map);
+  tileLayer = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 18 }).addTo(map);
   L.control.zoom({ position: 'topleft' }).addTo(map);
   L.control.attribution({ position: 'bottomright', prefix: '© OpenStreetMap' }).addTo(map);
   renderMap();
   updateMapChip();
+}
+
+function toggleMapMode() {
+  mapMode = mapMode === 'map' ? 'schematic' : 'map';
+  const btn = document.getElementById('map-mode-btn');
+  const mapEl = document.getElementById('map');
+  if (mapMode === 'schematic') {
+    tileLayer.remove();
+    mapEl.classList.add('schematic-mode');
+    btn.classList.add('active');
+    btn.innerHTML = '地図<br>モード';
+  } else {
+    tileLayer.addTo(map);
+    mapEl.classList.remove('schematic-mode');
+    btn.classList.remove('active');
+    btn.innerHTML = '路線図<br>モード';
+  }
+  renderMap();
 }
 
 function renderMap() {
@@ -2898,25 +2942,24 @@ function renderMap() {
       const a = hw.ics[i], b = hw.ics[i+1];
       const isGap = !!a.gap_after; // 物理的に途切れた区間（未開通等）
       if (isGap) {
-        // 未開通・途切れ区間：薄いオレンジ点線（走行不能区間として表示）
-        const pl = L.polyline([[a.lat,a.lng],[b.lat,b.lng]], {
-          color: '#FF6F00',
-          weight: 2,
-          opacity: 0.28,
-          dashArray: '4,10'
-        }).addTo(map);
-        pl.bindPopup(`<b style="color:${hw.color}">${hw.short}（${hw.num}）</b><br>${a.n} → ${b.n}<br><span style="color:#FF6F00">🚧 未開通区間</span>`);
-        segs.push(pl);
+        // 未開通・途切れ区間（路線図モードでは非表示）
+        if (mapMode === 'map') {
+          const pl = L.polyline([[a.lat,a.lng],[b.lat,b.lng]], {
+            color: '#FF6F00', weight: 2, opacity: 0.28, dashArray: '4,10'
+          }).addTo(map);
+          pl.bindPopup(`<b style="color:${hw.color}">${hw.short}（${hw.num}）</b><br>${a.n} → ${b.n}<br><span style="color:#FF6F00">🚧 未開通区間</span>`);
+          segs.push(pl);
+        }
       } else {
         const driven = isSegmentDriven(hw.id, i);
-        const show = driven;
+        const isSchematic = mapMode === 'schematic';
         const pl = L.polyline([[a.lat,a.lng],[b.lat,b.lng]], {
-          color: show ? hw.color : '#aaaaaa',
-          weight: show ? 5 : 2.5,
-          opacity: show ? 0.92 : 0.45,
-          dashArray: show ? null : '7,5'
+          color:     driven ? hwColor(hw) : (isSchematic ? '#cccccc' : '#aaaaaa'),
+          weight:    driven ? (isSchematic ? 6 : 5) : (isSchematic ? 2.5 : 2.5),
+          opacity:   driven ? 1.0 : (isSchematic ? 0.7 : 0.45),
+          dashArray: driven ? null : (isSchematic ? null : '7,5')
         }).addTo(map);
-        pl.bindPopup(`<b style="color:${hw.color}">${hw.short}（${hw.num}）</b><br>${a.n} → ${b.n}<br><span style="color:${driven?'#43a047':'#999'}">${driven?'走行済み':'未走行'}</span><br><button onmousedown="map.closePopup();selectHwFromMap('${hw.id}')" style="margin-top:8px;width:100%;padding:7px 0;background:#007B43;color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit">この路線を記録</button>`);
+        pl.bindPopup(`<b style="color:${hwColor(hw)}">${hw.short}（${hw.num}）</b><br>${a.n} → ${b.n}<br><span style="color:${driven?'#43a047':'#999'}">${driven?'走行済み':'未走行'}</span><br><button onmousedown="map.closePopup();selectHwFromMap('${hw.id}')" style="margin-top:8px;width:100%;padding:7px 0;background:#007B43;color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit">この路線を記録</button>`);
         segs.push(pl);
       }
     }
@@ -3045,7 +3088,7 @@ function openHwDropdown() {
   } else {
     dd.innerHTML = filtered.map(hw =>
       `<div class="hw-drop-item" onmousedown="selectHighway('${hw.id}')">
-        <span class="hw-drop-num" style="background:${hw.color}">${primaryNum(hw.num)}</span>
+        <span class="hw-drop-num" style="background:${hwColor(hw)}">${hw.num}</span>
         <span>${hw.name}</span>
       </div>`
     ).join('');
@@ -3065,7 +3108,7 @@ function selectHighway(hwId) {
   if (!hw) return;
   document.getElementById('hw-search').value = '';
   closeHwDropdown();
-  document.getElementById('hw-selected-label').textContent = `${primaryNum(hw.num)}  ${hw.name}`;
+  document.getElementById('hw-selected-label').textContent = `${hw.num}  ${hw.name}`;
   document.getElementById('hw-selected-bar').classList.add('show');
   onHighwayChange();
 }
@@ -3151,9 +3194,9 @@ function renderHistory() {
     const km = (hw.ics[r.e].km - hw.ics[r.s].km).toFixed(1);
     if (r.date !== lastDate) { html += `<div class="list-section-label">${r.date.replace(/-/g,'/')}</div>`; lastDate = r.date; }
     html += `<div class="history-item" onclick="openEditModal('${r.id}')">
-      <div class="hw-badge" style="background:${hw.color}">
+      <div class="hw-badge" style="background:${hwColor(hw)}">
         <span class="hw-badge-name">${hw.short}</span>
-        <span class="hw-badge-num">${primaryNum(hw.num)}</span>
+        <span class="hw-badge-num">${hw.num}</span>
       </div>
       <div class="history-info">
         <div class="history-route">${hw.ics[r.s].n} → ${hw.ics[r.e].n}</div>
@@ -3173,7 +3216,7 @@ function openEditModal(recordId) {
   editingRecordId = recordId;
   const hw = HIGHWAYS.find(h => h.id === r.hw);
   if (!hw) return;
-  document.getElementById('edit-hw-label').textContent = `${primaryNum(hw.num)}  ${hw.name}`;
+  document.getElementById('edit-hw-label').textContent = `${hw.num}  ${hw.name}`;
   const ss = document.getElementById('edit-sel-start');
   const se = document.getElementById('edit-sel-end');
   ss.innerHTML = '';
@@ -3287,10 +3330,10 @@ function renderStats() {
       </div>
       ${sorted.map(h => `
         <div class="hw-stat-row">
-          <div class="hw-stat-badge" style="background:${h.color}"><span>${h.short}</span></div>
+          <div class="hw-stat-badge" style="background:${hwColor(h)}"><span>${h.short}</span></div>
           <div class="hw-stat-info">
-            <div class="hw-stat-name">${primaryNum(h.num)} ${h.name}</div>
-            <div class="hw-stat-bar-bg"><div class="hw-stat-bar" style="width:${h.pct}%;background:${h.color}"></div></div>
+            <div class="hw-stat-name">${h.num} ${h.name}</div>
+            <div class="hw-stat-bar-bg"><div class="hw-stat-bar" style="width:${h.pct}%;background:${hwColor(h)}"></div></div>
             <div class="hw-stat-km">${h.dKm.toFixed(1)} / ${h.maxKm.toFixed(1)} km（${h.pct.toFixed(1)}%）</div>
           </div>
         </div>`).join('')}
