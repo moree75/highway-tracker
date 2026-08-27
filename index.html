@@ -772,6 +772,7 @@ const HIGHWAYS = [
     {n:"柏IC", km:10.8, lat:35.912083, lng:139.940269},
     {n:"柏SIC", km:13.9, lat:35.912083, lng:139.940269},
     {n:"谷和原IC", km:19.1, lat:35.966685, lng:139.97925},
+    {n:"つくばみらいSIC", km:20.4, lat:35.985, lng:140.020},
     {n:"谷田部IC", km:23.0, lat:36.024498, lng:140.080082},
     {n:"つくばJCT", km:28.7, lat:36.033736, lng:140.123055},
     {n:"桜土浦IC", km:34.0, lat:36.056527, lng:140.154787},
@@ -869,6 +870,7 @@ const HIGHWAYS = [
       {n:"高松東IC",km:152.4,lat:34.298293,lng:134.113559},{n:"高松中央IC",km:156.3,lat:34.30529,lng:134.071193},{n:"高松檀紙IC",km:162.9,lat:34.306448,lng:134.006853},
       {n:"高松西IC",km:165.4,lat:34.295711,lng:133.98257},{n:"府中湖SIC",km:7.3,lat:34.274803,lng:133.918859},{n:"坂出JCT",km:14.0,lat:34.281055,lng:133.848498},
       {n:"善通寺IC",km:21.6,lat:34.241565,lng:133.782349},{n:"三豊鳥坂IC",km:29.5,lat:34.207817,lng:133.730656},{n:"さぬき豊中IC",km:36.3,lat:34.150209,lng:133.716554},
+      {n:"観音寺SIC",km:39.8,lat:34.126,lng:133.694},
       {n:"大野原IC",km:45.3,lat:34.088389,lng:133.658341},{n:"川之江JCT",km:56.8,lat:33.997666,lng:133.596258}
     ]
   },
@@ -1700,7 +1702,10 @@ const HIGHWAYS = [
       {n:"江津IC",km:0.0,lat:35.001358,lng:132.211669},{n:"江津西IC",km:5.1,lat:34.969566,lng:132.173477},{n:"浜田東IC",km:11.1,lat:34.924464,lng:132.142116},
       {n:"浜田JCT",km:14.5,lat:34.907898,lng:132.104543},{n:"浜田IC",km:15.8,lat:34.907898,lng:132.104543},{n:"相生IC",km:17.8,lat:34.893263,lng:132.101035},
       {n:"竹迫IC",km:19.8,lat:34.89252,lng:132.079357},{n:"原井IC",km:21.8,lat:34.885934,lng:132.068994},{n:"浜田港IC",km:22.4,lat:34.881212,lng:132.065835},
-      {n:"西村IC",km:29.9,lat:34.842352,lng:132.012515},{n:"石見三隅IC",km:36.3,lat:34.80152,lng:131.970182},{n:"遠田IC",km:51.5,lat:34.707415,lng:131.860325},
+      {n:"西村IC",km:29.9,lat:34.842352,lng:132.012515},{n:"石見三隅IC",km:36.3,lat:34.80152,lng:131.970182},
+      {n:"岡見IC",km:41.5,lat:34.769,lng:131.933},  // NEW - 三隅・益田道路 2026-03-28開通
+      {n:"鎌手IC",km:46.5,lat:34.738,lng:131.896},  // NEW - 2026-08-06開通
+      {n:"遠田IC",km:51.5,lat:34.707415,lng:131.860325},
       {n:"久城IC",km:53.2,lat:34.699707,lng:131.853258,gap_after:true},{n:"高津IC",km:56.0,lat:34.685587,lng:131.82299},{n:"萩・石見空港IC",km:57.7,lat:34.676127,lng:131.811698},
       {n:"須子IC（角井西交差点）",km:59.3,lat:34.659998,lng:131.811354,gap_after:true},
       {n:"萩IC",km:9.0,lat:34.388978,lng:131.399308},
@@ -2858,6 +2863,64 @@ let activeProfileId;
   if (!profiles.find(p => p.id === activeProfileId)) {
     activeProfileId = profiles[0].id;
     localStorage.setItem('hwy_active_profile', activeProfileId);
+  }
+})();
+
+// ═══════════════════════════════════════════════════════════
+//  IC追加データ移行（インデックスずれ修正）
+// ═══════════════════════════════════════════════════════════
+(function migrateIcInsertions() {
+  // 2026-08 つくばみらいSIC追加：常磐道 index7以降を+1
+  if (!localStorage.getItem('ic_mig_tsukubamirai_v1')) {
+    const key = 'hwy_records_' + activeProfileId;
+    let recs = JSON.parse(localStorage.getItem(key) || '[]');
+    recs = recs.map(r => {
+      if (r.hw !== 'joban') return r;
+      return { ...r, s: r.s >= 7 ? r.s + 1 : r.s, e: r.e >= 7 ? r.e + 1 : r.e };
+    });
+    localStorage.setItem(key, JSON.stringify(recs));
+    // 他プロファイルも対象
+    const profiles = JSON.parse(localStorage.getItem('hwy_profiles') || '[]');
+    profiles.forEach(p => {
+      if (p.id === activeProfileId) return;
+      const pk = 'hwy_records_' + p.id;
+      let pr = JSON.parse(localStorage.getItem(pk) || '[]');
+      pr = pr.map(r => {
+        if (r.hw !== 'joban') return r;
+        return { ...r, s: r.s >= 7 ? r.s + 1 : r.s, e: r.e >= 7 ? r.e + 1 : r.e };
+      });
+      localStorage.setItem(pk, JSON.stringify(pr));
+    });
+    localStorage.setItem('ic_mig_tsukubamirai_v1', '1');
+  }
+  // 2026-07 観音寺SIC追加：高松道 index18以降を+1
+  if (!localStorage.getItem('ic_mig_kanonji_v1')) {
+    const profiles = JSON.parse(localStorage.getItem('hwy_profiles') || '[]');
+    [activeProfileId, ...profiles.map(p => p.id)].filter((v,i,a)=>a.indexOf(v)===i).forEach(pid => {
+      const pk = 'hwy_records_' + pid;
+      let pr = JSON.parse(localStorage.getItem(pk) || '[]');
+      pr = pr.map(r => {
+        if (r.hw !== 'takamatsu') return r;
+        return { ...r, s: r.s >= 18 ? r.s + 1 : r.s, e: r.e >= 18 ? r.e + 1 : r.e };
+      });
+      localStorage.setItem(pk, JSON.stringify(pr));
+    });
+    localStorage.setItem('ic_mig_kanonji_v1', '1');
+  }
+  // 2026-08 岡見IC・鎌手IC追加：山陰道 index56以降を+2
+  // (石見三隅IC=55, 遠田IC=56→58)
+  if (!localStorage.getItem('ic_mig_sanin_okami_kamate_v1')) {
+    const profiles = JSON.parse(localStorage.getItem('hwy_profiles') || '[]');
+    [activeProfileId, ...profiles.map(p => p.id)].filter((v,i,a)=>a.indexOf(v)===i).forEach(pid => {
+      const pk = 'hwy_records_' + pid;
+      let pr = JSON.parse(localStorage.getItem(pk) || '[]');
+      pr = pr.map(r => {
+        if (r.hw !== 'sanin') return r;
+        return { ...r, s: r.s >= 56 ? r.s + 2 : r.s, e: r.e >= 56 ? r.e + 2 : r.e };
+      });
+      localStorage.setItem(pk, JSON.stringify(pr));
+    });
+    localStorage.setItem('ic_mig_sanin_okami_kamate_v1', '1');
   }
 })();
 
