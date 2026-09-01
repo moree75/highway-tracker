@@ -215,9 +215,9 @@
 <div class="panel" id="panel-stats">
   <div class="panel-header" style="display:flex;justify-content:space-between;align-items:center">
     <span>走行統計</span>
-    <button onclick="shareToX()" style="background:rgba(255,255,255,0.18);color:#fff;border:1.5px solid rgba(255,255,255,0.5);border-radius:20px;padding:7px 16px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;display:flex;align-items:center;gap:6px;min-height:36px">
-      <svg width="16" height="16" viewBox="0 0 24 24" fill="white"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-4.714-6.231-5.401 6.231H2.746l7.73-8.835L1.254 2.25H8.08l4.258 5.632 5.906-5.632zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg>
-      シェア
+    <button onclick="shareStats()" style="background:rgba(255,255,255,0.18);color:#fff;border:1.5px solid rgba(255,255,255,0.5);border-radius:20px;padding:7px 16px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;display:flex;align-items:center;gap:6px;min-height:36px">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg>
+      共有
     </button>
   </div>
   <div id="stats-content"></div>
@@ -3505,33 +3505,155 @@ function importData(event) {
 }
 
 // ═══════════════════════════════════════════════════════════
-//  X SHARE
+//  共有（地図画像 + 統計）
 // ═══════════════════════════════════════════════════════════
-function shareToX() {
-  const hwStats = HIGHWAYS.map(hw => {
-    const driven = new Set();
-    records.filter(r => r.hw === hw.id).forEach(r => { for(let i=r.s;i<r.e;i++) driven.add(i); });
-    let dKm = 0;
-    driven.forEach(i => {
-      if (i < hw.ics.length-1 && !hw.ics[i].gap_after &&
-          hw.ics[i].km !== undefined && hw.ics[i+1].km !== undefined)
-        dKm += hw.ics[i+1].km - hw.ics[i].km;
+async function shareStats() {
+  showToast('画像を生成中...');
+  try {
+    // ── 統計計算 ──
+    const hwStats = HIGHWAYS.map(hw => {
+      const driven = new Set();
+      records.filter(r => r.hw === hw.id).forEach(r => {
+        const s = Math.min(r.s, r.e), e = Math.max(r.s, r.e);
+        for (let i = s; i < e; i++) driven.add(i);
+      });
+      let dKm = 0;
+      driven.forEach(i => {
+        if (i < hw.ics.length-1 && !hw.ics[i].gap_after &&
+            hw.ics[i].km !== undefined && hw.ics[i+1].km !== undefined)
+          dKm += hw.ics[i+1].km - hw.ics[i].km;
+      });
+      return { ...hw, dKm, maxKm: calcBuiltKm(hw), drivenIdx: driven };
     });
-    return { ...hw, dKm, maxKm: calcBuiltKm(hw) };
-  });
-  const totalDriven = hwStats.reduce((s,h) => s+h.dKm, 0);
-  const totalMax = hwStats.reduce((s,h) => s+h.maxKm, 0);
-  const coverage = totalMax > 0 ? (totalDriven/totalMax*100).toFixed(1) : '0.0';
-  const hwDriven = hwStats.filter(h => h.dKm > 0).length;
-  // 走行率100%の路線
-  const completed = hwStats.filter(h => h.maxKm > 0 && h.dKm >= h.maxKm);
-  let completedText = '';
-  if (completed.length > 0) {
-    completedText = '\n走破済み：' + completed.slice(0, 3).map(h => h.short).join('、') + (completed.length > 3 ? ` 他${completed.length-3}路線` : '');
+    const totalDriven = hwStats.reduce((s,h) => s+h.dKm, 0);
+    const totalMax    = hwStats.reduce((s,h) => s+h.maxKm, 0);
+    const coverage    = totalMax > 0 ? (totalDriven/totalMax*100).toFixed(1) : '0.0';
+
+    // ── セグメント収集 ──
+    const drivenSegs = [], bgSegs = [];
+    let minLat=Infinity, maxLat=-Infinity, minLng=Infinity, maxLng=-Infinity;
+
+    hwStats.forEach(hw => {
+      for (let i = 0; i < hw.ics.length - 1; i++) {
+        const a = hw.ics[i], b = hw.ics[i+1];
+        if (!a.lat || !a.lng || !b.lat || !b.lng || a.gap_after) continue;
+        const seg = [{lat:a.lat,lng:a.lng},{lat:b.lat,lng:b.lng}];
+        if (hw.drivenIdx.has(i)) {
+          drivenSegs.push({seg, color: hw.color || '#007B43'});
+          seg.forEach(p => {
+            minLat=Math.min(minLat,p.lat); maxLat=Math.max(maxLat,p.lat);
+            minLng=Math.min(minLng,p.lng); maxLng=Math.max(maxLng,p.lng);
+          });
+        } else {
+          bgSegs.push(seg);
+        }
+      }
+    });
+
+    if (drivenSegs.length === 0) { showToast('走行記録がありません'); return; }
+
+    // ── Canvas描画 ──
+    const W=1080, H=1350;
+    const canvas = document.createElement('canvas');
+    canvas.width=W; canvas.height=H;
+    const ctx = canvas.getContext('2d');
+
+    // 背景
+    ctx.fillStyle='#003d22'; ctx.fillRect(0,0,W,H);
+    ctx.strokeStyle='rgba(255,255,255,0.04)'; ctx.lineWidth=1;
+    for(let x=0;x<W;x+=90){ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,H);ctx.stroke();}
+    for(let y=0;y<H;y+=90){ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(W,y);ctx.stroke();}
+
+    // 座標変換設定
+    const STATS_H=240, PAD=70;
+    const mapW=W-PAD*2, mapH=H-STATS_H-PAD*2;
+    const latPad=(maxLat-minLat)*0.25||0.4, lngPad=(maxLng-minLng)*0.25||0.4;
+    const bMinLat=minLat-latPad, bMaxLat=maxLat+latPad;
+    const bMinLng=minLng-lngPad, bMaxLng=maxLng+lngPad;
+    const latRange=bMaxLat-bMinLat, lngRange=bMaxLng-bMinLng;
+    const scale=Math.min(mapW/lngRange, mapH/latRange);
+    const drawW=lngRange*scale, drawH=latRange*scale;
+    const offX=PAD+(mapW-drawW)/2, offY=PAD+(mapH-drawH)/2;
+    const toXY=(lat,lng)=>({x:offX+(lng-bMinLng)*scale, y:offY+(bMaxLat-lat)*scale});
+
+    // 未走行路線（薄く）- 走行エリア内のみ
+    ctx.globalAlpha=0.15; ctx.strokeStyle='#aaffcc'; ctx.lineWidth=1.5; ctx.lineCap='round';
+    bgSegs.forEach(([p1,p2])=>{
+      const a=toXY(p1.lat,p1.lng), b=toXY(p2.lat,p2.lng);
+      if(a.x<-50||a.x>W+50||a.y<-50||a.y>H+50) return;
+      ctx.beginPath(); ctx.moveTo(a.x,a.y); ctx.lineTo(b.x,b.y); ctx.stroke();
+    });
+
+    // 走行済み路線（グロー）
+    ctx.globalAlpha=0.4; ctx.lineWidth=5; ctx.lineCap='round';
+    drivenSegs.forEach(({seg:[p1,p2],color})=>{
+      ctx.strokeStyle=color;
+      ctx.shadowColor=color; ctx.shadowBlur=12;
+      const a=toXY(p1.lat,p1.lng), b=toXY(p2.lat,p2.lng);
+      ctx.beginPath(); ctx.moveTo(a.x,a.y); ctx.lineTo(b.x,b.y); ctx.stroke();
+    });
+    // 走行済み路線（本線）
+    ctx.globalAlpha=1; ctx.shadowBlur=0; ctx.lineWidth=4;
+    drivenSegs.forEach(({seg:[p1,p2],color})=>{
+      ctx.strokeStyle=color;
+      const a=toXY(p1.lat,p1.lng), b=toXY(p2.lat,p2.lng);
+      ctx.beginPath(); ctx.moveTo(a.x,a.y); ctx.lineTo(b.x,b.y); ctx.stroke();
+    });
+
+    // ── 統計パネル ──
+    const sy=H-STATS_H;
+    ctx.globalAlpha=1; ctx.shadowBlur=0;
+    ctx.fillStyle='rgba(0,0,0,0.55)'; ctx.fillRect(0,sy,W,STATS_H);
+    ctx.strokeStyle='#007B43'; ctx.lineWidth=3;
+    ctx.beginPath(); ctx.moveTo(0,sy); ctx.lineTo(W,sy); ctx.stroke();
+
+    // アプリ名
+    ctx.fillStyle='rgba(255,255,255,0.55)';
+    ctx.font='500 30px "Hiragino Sans","Yu Gothic",sans-serif';
+    ctx.textAlign='left'; ctx.fillText('高速記録', 60, sy+46);
+
+    // 走行距離
+    ctx.fillStyle='#00e87a';
+    ctx.font='bold 86px "Hiragino Sans","Yu Gothic",sans-serif';
+    ctx.textAlign='left'; ctx.fillText(`${totalDriven.toFixed(0)}km`, 50, sy+158);
+
+    // 走破率
+    ctx.fillStyle='#ffffff';
+    ctx.font='bold 86px "Hiragino Sans","Yu Gothic",sans-serif';
+    ctx.textAlign='right'; ctx.fillText(`${coverage}%`, W-50, sy+158);
+
+    // ラベル
+    ctx.font='26px "Hiragino Sans","Yu Gothic",sans-serif';
+    ctx.fillStyle='rgba(255,255,255,0.5)';
+    ctx.textAlign='left';  ctx.fillText('総走行距離', 60,  sy+196);
+    ctx.textAlign='right'; ctx.fillText('走破率',     W-60, sy+196);
+
+    // ── 共有 ──
+    canvas.toBlob(async blob => {
+      const profiles = JSON.parse(localStorage.getItem('hwy_profiles')||'[]');
+      const pName = profiles.find(p=>p.id===activeProfileId)?.name || 'マイプロフィール';
+      const shareText = `${pName}の走行記録\n累計 ${totalDriven.toFixed(0)}km｜走破率 ${coverage}%\n#高速走行記録 #ドライブ`;
+      const file = new File([blob], 'highway-record.png', {type:'image/png'});
+      const shareData = {title:'高速記録', text:shareText, files:[file]};
+      try {
+        if (navigator.share && navigator.canShare?.(shareData)) {
+          await navigator.share(shareData);
+        } else if (navigator.share) {
+          await navigator.share({title:'高速記録', text:shareText});
+        } else {
+          const a=document.createElement('a');
+          a.href=URL.createObjectURL(blob); a.download='highway-record.png'; a.click();
+          showToast('画像を保存しました');
+        }
+      } catch(e) {
+        if (e.name!=='AbortError') showToast('共有できませんでした');
+      }
+    }, 'image/png');
+
+  } catch(e) {
+    console.error(e);
+    showToast('画像の生成に失敗しました');
   }
-  const text = `高速道路走行記録\n累計 ${totalDriven.toFixed(0)} km\nカバー率 ${coverage}%\n${hwDriven} / ${HIGHWAYS.length} 路線走行済み${completedText}\n#高速走行記録 #ドライブ #高速道路`;
-  const url = `https://twitter.com/intent/tweet?text=${encodeURIComponent(text)}`;
-  window.open(url, '_blank', 'noopener');
 }
 
 // ═══════════════════════════════════════════════════════════
