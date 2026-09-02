@@ -1,5 +1,5 @@
 // ── バージョンをここだけ変えれば全ユーザーに更新が届く ──
-const CACHE_NAME = 'kosoku-kiroku-v8';
+const CACHE_NAME = 'kosoku-kiroku-v9';
 const TILE_CACHE = 'kosoku-tiles-v1';
 const MAX_TILES  = 500;
 
