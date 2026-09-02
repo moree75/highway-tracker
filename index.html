@@ -3628,27 +3628,32 @@ async function shareStats() {
     ctx.textAlign='left';  ctx.fillText('総走行距離', 60,  sy+196);
     ctx.textAlign='right'; ctx.fillText('走破率',     W-60, sy+196);
 
-    // ── 共有 ──
-    canvas.toBlob(async blob => {
-      const profiles = JSON.parse(localStorage.getItem('hwy_profiles')||'[]');
-      const pName = profiles.find(p=>p.id===activeProfileId)?.name || 'マイプロフィール';
-      const shareText = `${pName}の走行記録\n累計 ${totalDriven.toFixed(0)}km｜走破率 ${coverage}%\n#高速走行記録 #ドライブ`;
-      const file = new File([blob], 'highway-record.png', {type:'image/png'});
-      const shareData = {title:'高速記録', text:shareText, files:[file]};
-      try {
-        if (navigator.share && navigator.canShare?.(shareData)) {
-          await navigator.share(shareData);
-        } else if (navigator.share) {
-          await navigator.share({title:'高速記録', text:shareText});
-        } else {
-          const a=document.createElement('a');
-          a.href=URL.createObjectURL(blob); a.download='highway-record.png'; a.click();
-          showToast('画像を保存しました');
-        }
-      } catch(e) {
-        if (e.name!=='AbortError') showToast('共有できませんでした');
+    // ── 共有（toDataURL同期変換でユーザージェスチャーを維持） ──
+    const dataURL = canvas.toDataURL('image/png');
+    const arr = dataURL.split(',');
+    const bstr = atob(arr[1]);
+    const u8arr = new Uint8Array(bstr.length);
+    for (let i = 0; i < bstr.length; i++) u8arr[i] = bstr.charCodeAt(i);
+    const blob = new Blob([u8arr], {type:'image/png'});
+
+    const profiles = JSON.parse(localStorage.getItem('hwy_profiles')||'[]');
+    const pName = profiles.find(p=>p.id===activeProfileId)?.name || 'マイプロフィール';
+    const shareText = `${pName}の走行記録\n累計 ${totalDriven.toFixed(0)}km｜走破率 ${coverage}%\n#高速走行記録 #ドライブ`;
+    const file = new File([blob], 'highway-record.png', {type:'image/png'});
+    const shareData = {title:'高速記録', text:shareText, files:[file]};
+    try {
+      if (navigator.share && navigator.canShare?.(shareData)) {
+        await navigator.share(shareData);
+      } else if (navigator.share) {
+        await navigator.share({title:'高速記録', text:shareText});
+      } else {
+        const a=document.createElement('a');
+        a.href=URL.createObjectURL(blob); a.download='highway-record.png'; a.click();
+        showToast('画像を保存しました');
       }
-    }, 'image/png');
+    } catch(e) {
+      if (e.name!=='AbortError') showToast('共有できませんでした');
+    }
 
   } catch(e) {
     console.error(e);
